@@ -1,5 +1,5 @@
 --[[
-  KILASIK GUI - Advanced Game Control Interface (FIXED)
+  KILASIK GUI - Advanced Game Control Interface
   This script creates a feature-rich GUI with many commands and features
   
   Usage: Paste the code into your executor and run it
@@ -92,6 +92,7 @@ local colors = {
     categoryBG = Color3.fromRGB(30, 30, 35),
     favorite = Color3.fromRGB(255, 215, 0)
 }
+
 -- All Commands
 local commands = {
     -- Main commands
@@ -100,7 +101,6 @@ local commands = {
     {name = "InfiniteJump", desc = "Jump infinitely", category = "Character", func = function() toggleInfiniteJump() end, canFavorite = true},
     {name = "Fly", desc = "Toggle fly mode", category = "Character", func = function() toggleFly() end, canFavorite = true},
     {name = "Noclip", desc = "Walk through walls", category = "Character", func = function() toggleNoclip() end, canFavorite = true},
-    {name = "Reset", desc = "Reset character", category = "Character", func = function() if player.Character then player.Character:BreakJoints() end end, canFavorite = true},
     {name = "XRay", desc = "Make walls transparent", category = "Vision", func = function() toggleXRay() end, canFavorite = true},
     {name = "ESP", desc = "Highlight players and objects", category = "ESP", func = function() toggleESP() end, canFavorite = true},
     {name = "ESP Boxes", desc = "Toggle ESP boxes", category = "ESP", func = function() toggleESPOption("boxes") end, canFavorite = true},
@@ -141,8 +141,6 @@ local commands = {
     {name = "Sit", desc = "Play sit animation", category = "Animations", func = function() playAnimation("sit") end, canFavorite = true},
     {name = "Superhero", desc = "Play superhero animation", category = "Animations", func = function() playAnimation("superhero") end, canFavorite = true},
     {name = "Spin", desc = "Play spin animation", category = "Animations", func = function() playAnimation("spin") end, canFavorite = true},
-    {name = "Punch", desc = "Play punch animation", category = "Animations", func = function() playAnimation("punch") end, canFavorite = true},
-    {name = "Dino", desc = "Play dinosaur animation", category = "Animations", func = function() playAnimation("dino") end, canFavorite = true},
     
     -- Troll/Fun commands
     {name = "DanceAnimate", desc = "Play dance animation", category = "Fun", func = function() playDanceAnimation() end, canFavorite = true},
@@ -197,6 +195,7 @@ local categories = {
     "Visuals",
     "Settings"
 }
+
 -- =====================
 -- Function Definitions
 -- =====================
@@ -370,6 +369,37 @@ function toggleFly()
         setStatus("Fly mode disabled")
     end
 end
+
+-- X-Ray (see through walls)
+function toggleXRay()
+    xray = not xray
+    
+    if xray then
+        -- Make walls transparent
+        for _, part in ipairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") and not part:IsDescendantOf(player.Character) and part.Transparency < 0.8 and not part:IsA("Terrain") then
+                if not part:FindFirstChild("OriginalTransparency") then
+                    local originalValue = Instance.new("NumberValue")
+                    originalValue.Name = "OriginalTransparency"
+                    originalValue.Value = part.Transparency
+                    originalValue.Parent = part
+                end
+                part.Transparency = 0.8
+            end
+        end
+        setStatus("X-Ray enabled")
+    else
+        -- Restore wall transparency
+        for _, part in ipairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") and part:FindFirstChild("OriginalTransparency") then
+                part.Transparency = part.OriginalTransparency.Value
+                part.OriginalTransparency:Destroy()
+            end
+        end
+        setStatus("X-Ray disabled")
+    end
+end
+
 -- Toggle specific ESP option
 function toggleESPOption(option)
     if option == "boxes" then
@@ -403,19 +433,6 @@ function toggleESP()
     esp.enabled = not esp.enabled
     
     if esp.enabled then
-        -- Check if Drawing library is available (required for some ESP features)
-        local hasDrawing = false
-        pcall(function()
-            hasDrawing = Drawing ~= nil
-        end)
-        
-        if not hasDrawing then
-            -- Fall back to built-in highlighting only
-            setStatus("ESP enabled (limited - Drawing library not available)")
-        else
-            setStatus("ESP enabled")
-        end
-        
         -- Start ESP code
         updateESP()
         
@@ -436,6 +453,8 @@ function toggleESP()
                 updateESP()
             end)
         end
+        
+        setStatus("ESP enabled")
     else
         -- Disable ESP code, clean up elements
         if getgenv().ESPUpdateLoop then
@@ -631,187 +650,199 @@ function updateESP()
         end
     end
 end
--- Player selector UI for commands that need to select a player
-function showPlayerSelector(callback)
-    -- Create a player selection UI
-    local container = (syn and syn.protect_gui) and game:GetService("CoreGui") or player.PlayerGui
+
+-- Show Aimbot settings
+function showAimbotSettings()
+    -- This would create a settings menu, but for now we'll just toggle these options
+    aimbotSettings.teamCheck = not aimbotSettings.teamCheck
+    setStatus("Aimbot Team Check: " .. (aimbotSettings.teamCheck and "Enabled" or "Disabled"))
+end
+
+-- Set aimbot FOV size
+function setAimbotFOV(size)
+    aimbotSettings.fovSize = size
+    setStatus("Aimbot FOV size set to: " .. size)
     
-    local selectorGui = Instance.new("ScreenGui")
-    selectorGui.Name = "KILASIK_PlayerSelector"
-    selectorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    -- Update FOV circle if it exists
+    if aimbotSettings.enabled and aimbotSettings.showFOV then
+        local fovcircle = Drawing.new("Circle")
+        fovcircle.Visible = true
+        fovcircle.Radius = size
+        fovcircle.Thickness = 1
+        fovcircle.Transparency = 1
+        fovcircle.Color = Color3.fromRGB(255, 255, 255)
+        fovcircle.Position = camera.ViewportSize / 2
+        
+        -- Store it in the settings
+        if getgenv().FOVCircle then
+            getgenv().FOVCircle:Remove()
+        end
+        getgenv().FOVCircle = fovcircle
+    end
+end
+
+-- Toggle wallbang
+function toggleWallbang()
+    aimbotSettings.wallbangEnabled = not aimbotSettings.wallbangEnabled
+    setStatus("Wallbang: " .. (aimbotSettings.wallbangEnabled and "Enabled" or "Disabled"))
+end
+
+-- Aimbot (auto aim)
+function toggleAimbot()
+    aimbotSettings.enabled = not aimbotSettings.enabled
     
-    if syn and syn.protect_gui then
-        syn.protect_gui(selectorGui)
+    if aimbotSettings.enabled then
+        -- Create FOV circle if showing
+        if aimbotSettings.showFOV then
+            local fovcircle = Drawing.new("Circle")
+            fovcircle.Visible = true
+            fovcircle.Radius = aimbotSettings.fovSize
+            fovcircle.Thickness = 1
+            fovcircle.Transparency = 1
+            fovcircle.Color = Color3.fromRGB(255, 255, 255)
+            fovcircle.Position = camera.ViewportSize / 2
+            
+            -- Store it for later updates
+            if getgenv().FOVCircle then
+                getgenv().FOVCircle:Remove()
+            end
+            getgenv().FOVCircle = fovcircle
+        end
+        
+        -- Create aimbot update loop
+        if not getgenv().AimbotUpdateLoop then
+            getgenv().AimbotUpdateLoop = RunService.RenderStepped:Connect(function()
+                if not aimbotSettings.enabled then
+                    getgenv().AimbotUpdateLoop:Disconnect()
+                    getgenv().AimbotUpdateLoop = nil
+                    
+                    -- Remove FOV circle
+                    if getgenv().FOVCircle then
+                        getgenv().FOVCircle:Remove()
+                        getgenv().FOVCircle = nil
+                    end
+                    return
+                end
+                
+                -- Update FOV circle position
+                if getgenv().FOVCircle then
+                    getgenv().FOVCircle.Position = camera.ViewportSize / 2
+                end
+                
+                -- Check for right mouse button (or whatever key is set)
+                local isKeyDown = false
+                if aimbotSettings.toggleKey == "RightMouse" then
+                    isKeyDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+                else
+                    isKeyDown = UserInputService:IsKeyDown(Enum.KeyCode[aimbotSettings.toggleKey])
+                end
+                
+                if not isKeyDown then
+                    aimbotTarget = nil
+                    return
+                end
+                
+                -- Find closest player within FOV
+                local closestPlayer = nil
+                local closestDistance = math.huge
+                local screenCenter = camera.ViewportSize / 2
+                
+                for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                    if otherPlayer ~= player and otherPlayer.Character and 
+                       otherPlayer.Character:FindFirstChild("Humanoid") and 
+                       otherPlayer.Character.Humanoid.Health > 0 and
+                       otherPlayer.Character:FindFirstChild(aimbotSettings.aimPart) then
+                        
+                        -- Check team if team check enabled
+                        if aimbotSettings.teamCheck and player.Team and otherPlayer.Team and player.Team == otherPlayer.Team then
+                            continue
+                        end
+                        
+                        -- Check if target is visible if visibility check enabled
+                        if aimbotSettings.visibilityCheck and not isTargetVisible(otherPlayer.Character, aimbotSettings.aimPart) then
+                            continue
+                        end
+                        
+                        -- Check if target is within FOV
+                        local targetPart = otherPlayer.Character[aimbotSettings.aimPart]
+                        local screenPoint = camera:WorldToScreenPoint(targetPart.Position)
+                        
+                        if screenPoint.Z > 0 then
+                            local screenDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+                            
+                            if screenDistance <= aimbotSettings.fovSize then
+                                if screenDistance < closestDistance then
+                                    closestDistance = screenDistance
+                                    closestPlayer = otherPlayer
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                -- Aim at the closest player
+                if closestPlayer then
+                    aimbotTarget = closestPlayer
+                    local targetPart = closestPlayer.Character[aimbotSettings.aimPart]
+                    
+                    -- Calculate aim point, adding a bit of smoothing
+                    local targetPos = targetPart.Position
+                    local aimPos = camera.CFrame.Position + (targetPos - camera.CFrame.Position).Unit * 1000
+                    
+                    -- Apply smoothing
+                    local currentAim = camera.CFrame.LookVector
+                    local targetAim = (targetPos - camera.CFrame.Position).Unit
+                    local smoothedAim = currentAim:Lerp(targetAim, aimbotSettings.sensitivity)
+                    
+                    -- Set camera to look at target
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + smoothedAim * 1000)
+                else
+                    aimbotTarget = nil
+                end
+            end)
+        end
+        
+        setStatus("Aimbot enabled - Right click to activate")
+    else
+        aimbotTarget = nil
+        
+        -- Cleanup
+        if getgenv().AimbotUpdateLoop then
+            getgenv().AimbotUpdateLoop:Disconnect()
+            getgenv().AimbotUpdateLoop = nil
+        end
+        
+        if getgenv().FOVCircle then
+            getgenv().FOVCircle:Remove()
+            getgenv().FOVCircle = nil
+        end
+        
+        setStatus("Aimbot disabled")
+    end
+end
+
+-- Check if a target is visible (for aimbot)
+function isTargetVisible(character, partName)
+    if not character or not character:FindFirstChild(partName) or not player.Character or not player.Character:FindFirstChild("Head") then
+        return false
     end
     
-    selectorGui.Parent = container
+    local targetPart = character[partName]
+    local origin = player.Character.Head.Position
+    local direction = (targetPart.Position - origin).Unit
+    local distance = (targetPart.Position - origin).Magnitude
     
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 300, 0, 350)
-    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -175)
-    mainFrame.BackgroundColor3 = colors.background
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = selectorGui
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {player.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     
-    local uiCorner = Instance.new("UICorner")
-    uiCorner.CornerRadius = UDim.new(0, 10)
-    uiCorner.Parent = mainFrame
+    local raycastResult = workspace:Raycast(origin, direction * distance, raycastParams)
     
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.BackgroundColor3 = colors.header
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = mainFrame
-    
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 10)
-    titleCorner.Parent = titleBar
-    
-    local titleCover = Instance.new("Frame")
-    titleCover.Size = UDim2.new(1, 0, 0, 10)
-    titleCover.Position = UDim2.new(0, 0, 1, -10)
-    titleCover.BackgroundColor3 = colors.header
-    titleCover.BorderSizePixel = 0
-    titleCover.ZIndex = 0
-    titleCover.Parent = titleBar
-    
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -40, 1, 0)
-    titleLabel.Position = UDim2.new(0, 10, 0, 0)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "Select Player"
-    titleLabel.Font = Enum.Font.GothamSemibold
-    titleLabel.TextSize = 16
-    titleLabel.TextColor3 = colors.text
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.Parent = titleBar
-    
-    local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 30, 0, 30)
-    closeButton.Position = UDim2.new(1, -30, 0, 0)
-    closeButton.BackgroundColor3 = colors.warning
-    closeButton.Text = "X"
-    closeButton.Font = Enum.Font.GothamBold
-    closeButton.TextSize = 16
-    closeButton.TextColor3 = colors.text
-    closeButton.BorderSizePixel = 0
-    closeButton.Parent = titleBar
-    
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 6)
-    closeCorner.Parent = closeButton
-    
-    -- Search bar
-    local searchBar = Instance.new("TextBox")
-    searchBar.Size = UDim2.new(1, -20, 0, 30)
-    searchBar.Position = UDim2.new(0, 10, 0, 40)
-    searchBar.BackgroundColor3 = colors.neutralDark
-    searchBar.PlaceholderText = "Search players..."
-    searchBar.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    searchBar.Text = ""
-    searchBar.Font = Enum.Font.Gotham
-    searchBar.TextSize = 14
-    searchBar.TextColor3 = colors.text
-    searchBar.BorderSizePixel = 0
-    searchBar.Parent = mainFrame
-    
-    local searchCorner = Instance.new("UICorner")
-    searchCorner.CornerRadius = UDim.new(0, 6)
-    searchCorner.Parent = searchBar
-    
-    -- Player list
-    local playerList = Instance.new("ScrollingFrame")
-    playerList.Size = UDim2.new(1, -20, 1, -80)
-    playerList.Position = UDim2.new(0, 10, 0, 80)
-    playerList.BackgroundTransparency = 1
-    playerList.BorderSizePixel = 0
-    playerList.ScrollBarThickness = 6
-    playerList.ScrollBarImageColor3 = colors.neutralLight
-    playerList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    playerList.Parent = mainFrame
-    
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Padding = UDim.new(0, 5)
-    listLayout.Parent = playerList
-    
-    -- Create player buttons
-    local function updatePlayerList(searchText)
-        -- Clear current list
-        for _, child in pairs(playerList:GetChildren()) do
-            if child:IsA("TextButton") then
-                child:Destroy()
-            end
-        end
-        
-        -- Filter players
-        local filteredPlayers = {}
-        for _, plyr in ipairs(Players:GetPlayers()) do
-            if plyr ~= player and (searchText == "" or string.find(string.lower(plyr.Name), string.lower(searchText))) then
-                table.insert(filteredPlayers, plyr)
-            end
-        end
-        
-        -- Create buttons
-        for i, plyr in ipairs(filteredPlayers) do
-            local playerButton = Instance.new("TextButton")
-            playerButton.Size = UDim2.new(1, -5, 0, 40)
-            playerButton.BackgroundColor3 = colors.button
-            playerButton.Text = ""
-            playerButton.BorderSizePixel = 0
-            playerButton.Parent = playerList
-            
-            local buttonCorner = Instance.new("UICorner")
-            buttonCorner.CornerRadius = UDim.new(0, 6)
-            buttonCorner.Parent = playerButton
-            
-            local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(1, -20, 1, 0)
-            nameLabel.Position = UDim2.new(0, 10, 0, 0)
-            nameLabel.BackgroundTransparency = 1
-            nameLabel.Font = Enum.Font.GothamSemibold
-            nameLabel.TextSize = 14
-            nameLabel.TextColor3 = colors.text
-            nameLabel.Text = plyr.Name
-            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-            nameLabel.Parent = playerButton
-            
-            -- Button events
-            playerButton.MouseEnter:Connect(function()
-                playerButton.BackgroundColor3 = colors.buttonHover
-            end)
-            
-            playerButton.MouseLeave:Connect(function()
-                playerButton.BackgroundColor3 = colors.button
-            end)
-            
-            playerButton.MouseButton1Click:Connect(function()
-                callback(plyr)
-                selectorGui:Destroy()
-            end)
-        end
-        
-        -- Update canvas size
-        playerList.CanvasSize = UDim2.new(0, 0, 0, #filteredPlayers * 45)
+    if raycastResult then
+        return raycastResult.Instance:IsDescendantOf(character)
     end
     
-    -- Initial list
-    updatePlayerList("")
-    
-    -- Search functionality
-    searchBar.Changed:Connect(function(prop)
-        if prop == "Text" then
-            updatePlayerList(searchBar.Text)
-        end
-    end)
-    
-    -- Close button
-    closeButton.MouseButton1Click:Connect(function()
-        selectorGui:Destroy()
-    end)
+    return true
 end
 
 -- Toggle click teleport
@@ -853,14 +884,6 @@ end
 
 -- Teleport to player
 function teleportToPlayer(targetName)
-    -- If no player name provided, show selector UI
-    if not targetName or targetName == "" then
-        showPlayerSelector(function(selectedPlayer)
-            teleportToPlayer(selectedPlayer.Name)
-        end)
-        return
-    end
-    
     local targetPlayer = getPlayerFromName(targetName)
     
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and
@@ -871,16 +894,588 @@ function teleportToPlayer(targetName)
         setStatus("Player not found or unreachable")
     end
 end
--- Spectate player
-function spectatePlayer(targetName)
-    -- If no name provided, show selector
-    if not targetName or targetName == "" then
-        showPlayerSelector(function(selectedPlayer)
-            spectatePlayer(selectedPlayer.Name)
+
+-- Get player from name (partial match)
+function getPlayerFromName(name)
+    name = name:lower()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Name:lower():find(name) then
+            return plr
+        end
+    end
+    return nil
+end
+
+-- Rejoin server
+function rejoinServer()
+    setStatus("Rejoining server...")
+    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+end
+
+-- Remove fog
+function removeFog()
+    Lighting.FogStart = 100000
+    Lighting.FogEnd = 100000
+    setStatus("Fog removed")
+end
+
+-- Full brightness
+function enableFullBright()
+    local oldAmbient = Lighting.Ambient
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    
+    setStatus("Full brightness enabled")
+end
+
+-- Invisibility
+function makeInvisible()
+    if player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") and part.Name ~= "HumanoidRootPart" then
+                part.Transparency = 1
+            end
+        end
+        setStatus("Invisibility enabled (semi-invisible)")
+    end
+end
+
+-- Remove meshes
+function removeMeshes()
+    if player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("SpecialMesh") or part:IsA("Mesh") or part:IsA("MeshPart") then
+                part:Destroy()
+            end
+        end
+        setStatus("Meshes removed")
+    end
+end
+
+-- KillAura
+function toggleKillAura()
+    local killAuraEnabled = not (getgenv().KillAuraConnection ~= nil)
+    
+    if killAuraEnabled then
+        local range = 15 -- Hit range
+        
+        -- KillAura loop
+        getgenv().KillAuraConnection = RunService.Heartbeat:Connect(function()
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if otherPlayer ~= player and otherPlayer.Character and player.Character and
+                   otherPlayer.Character:FindFirstChild("Humanoid") and
+                   otherPlayer.Character.Humanoid.Health > 0 and
+                   otherPlayer.Character:FindFirstChild("HumanoidRootPart") and
+                   player.Character:FindFirstChild("HumanoidRootPart") then
+                    
+                    -- Check team if applicable
+                    if player.Team and otherPlayer.Team and player.Team == otherPlayer.Team then
+                        continue
+                    end
+                    
+                    local distance = (otherPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    
+                    if distance <= range then
+                        -- Find weapon and hit or slash
+                        for _, tool in pairs(player.Character:GetChildren()) do
+                            if tool:IsA("Tool") and (tool:FindFirstChild("Handle") or tool:FindFirstChild("Blade")) then
+                                -- Try different methods to hit
+                                
+                                -- Method 1: Direct hit
+                                if tool.Name:lower():find("sword") or tool.Name:lower():find("knife") then
+                                    tool:Activate()
+                                    -- Target the hit
+                                    local handlePart = tool:FindFirstChild("Handle") or tool:FindFirstChild("Blade")
+                                    if handlePart then
+                                        handlePart.CFrame = otherPlayer.Character.HumanoidRootPart.CFrame
+                                    end
+                                end
+                                
+                                -- Method 2: Remote event
+                                for _, event in pairs(tool:GetDescendants()) do
+                                    if event:IsA("RemoteEvent") and (event.Name:lower():find("hit") or event.Name:lower():find("damage")) then
+                                        event:FireServer(otherPlayer.Character.HumanoidRootPart)
+                                    end
+                                end
+                                
+                                -- Method 3: Try game-specific events
+                                for _, event in pairs(ReplicatedStorage:GetDescendants()) do
+                                    if event:IsA("RemoteEvent") and (event.Name:lower():find("damage") or event.Name:lower():find("hit")) then
+                                        event:FireServer(otherPlayer.Character.HumanoidRootPart)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end)
+        
+        setStatus("KillAura enabled - 15 stud range")
+    else
+        if getgenv().KillAuraConnection then
+            getgenv().KillAuraConnection:Disconnect()
+            getgenv().KillAuraConnection = nil
+        end
+        
+        setStatus("KillAura disabled")
+    end
+end
+
+-- Infinite ammo
+function giveInfiniteAmmo()
+    local gunHook
+    gunHook = hookmetamethod(game, "__namecall", function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        
+        if method == "FireServer" and self.Name:lower():find("ammo") or self.Name:lower():find("bullet") then
+            -- Ammo count hook
+            return
+        end
+        
+        return gunHook(self, ...)
+    end)
+    
+    setStatus("Infinite ammo activated (may not work in all games)")
+end
+
+-- God Mode (attempt)
+function attemptGodMode()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        -- Method 1: Clone Humanoid
+        local humanoid = player.Character.Humanoid
+        local cloneHum = humanoid:Clone()
+        humanoid.Name = "1"
+        cloneHum.Parent = player.Character
+        humanoid:Destroy()
+        cloneHum.Name = "Humanoid"
+        
+        -- Method 2: Prevent joint breaks
+        player.Character.Humanoid.BreakJointsOnDeath = false
+        
+        -- Method 3: Hook health
+        local healthHook
+        healthHook = hookmetamethod(game, "__index", function(self, key)
+            if self == player.Character.Humanoid and key == "Health" then
+                return 100
+            end
+            return healthHook(self, key)
+        end)
+        
+        setStatus("God Mode attempted (may not work in all games)")
+    end
+end
+
+-- Auto farm
+function toggleAutoFarm()
+    local autoFarmEnabled = not (getgenv().AutoFarmConnection ~= nil)
+    
+    if autoFarmEnabled then
+        -- Common resource names
+        local resourceNames = {
+            "Coin", "Gem", "Diamond", "Cash", "Money", "Gold", "Silver", "Bronze",
+            "Chest", "Crate", "Box", "Ore", "Resource", "Collectible", "Pickup",
+            "XP", "Exp", "Experience", "Points", "Token"
+        }
+        
+        getgenv().AutoFarmConnection = RunService.Heartbeat:Connect(function()
+            if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+            
+            local rootPart = player.Character.HumanoidRootPart
+            local closestResource = nil
+            local shortestDistance = 50 -- Max distance
+            
+            -- First search workspace
+            for _, child in ipairs(workspace:GetDescendants()) do
+                if child:IsA("BasePart") or child:IsA("Model") then
+                    local isResource = false
+                    
+                    -- Name check
+                    for _, resourceName in ipairs(resourceNames) do
+                        if child.Name:lower():find(resourceName:lower()) or 
+                           (child.Parent and child.Parent.Name:lower():find(resourceName:lower())) then
+                            isResource = true
+                            break
+                        end
+                    end
+                    
+                    -- Physical property check (shine, rotation, etc.)
+                    if not isResource and child:IsA("BasePart") then
+                        if child:FindFirstChildOfClass("ParticleEmitter") or
+                           child:FindFirstChildOfClass("PointLight") or
+                           child:FindFirstChildOfClass("Sparkles") then
+                            isResource = true
+                        end
+                        
+                        -- Also check by color
+                        if not isResource and (
+                            child.BrickColor == BrickColor.new("Bright yellow") or -- Gold/Money color
+                            child.BrickColor == BrickColor.new("Bright blue") or   -- Gem color
+                            child.BrickColor == BrickColor.new("New Yeller")       -- Money color
+                        ) then
+                            isResource = true
+                        end
+                    end
+                    
+                    if isResource then
+                        local targetPosition = child:IsA("Model") and child:GetModelCFrame().Position or child.Position
+                        local distance = (targetPosition - rootPart.Position).Magnitude
+                        
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestResource = child
+                        end
+                    end
+                end
+            end
+            
+            -- If a resource is found, auto collect
+            if closestResource then
+                local targetPosition = closestResource:IsA("Model") and closestResource:GetModelCFrame().Position or closestResource.Position
+                
+                -- Move toward resource
+                player.Character.Humanoid:MoveTo(targetPosition)
+                
+                -- If very close, teleport directly onto it for faster collection
+                if shortestDistance < 10 then
+                    rootPart.CFrame = CFrame.new(targetPosition)
+                end
+                
+                -- Trigger touch interest
+                firetouchinterest(rootPart, closestResource, 0)
+                wait(0.1)
+                firetouchinterest(rootPart, closestResource, 1)
+                
+                -- Try remote events
+                for _, event in pairs(closestResource:GetDescendants()) do
+                    if event:IsA("RemoteEvent") and (event.Name:lower():find("collect") or event.Name:lower():find("pickup") or event.Name:lower():find("grab")) then
+                        event:FireServer()
+                    end
+                end
+            end
+        end)
+        
+        setStatus("Auto farm enabled")
+    else
+        if getgenv().AutoFarmConnection then
+            getgenv().AutoFarmConnection:Disconnect()
+            getgenv().AutoFarmConnection = nil
+        end
+        
+        setStatus("Auto farm disabled")
+    end
+end
+
+-- Increase weapon reach
+function increaseReach()
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        
+        if method == "FireServer" and string.find(self.Name:lower(), "hit") or string.find(self.Name:lower(), "damage") then
+            -- Check and modify arguments
+            for i, v in pairs(args) do
+                if typeof(v) == "Vector3" then
+                    -- Increase range
+                    args[i] = player.Character.HumanoidRootPart.Position + (v - player.Character.HumanoidRootPart.Position).unit * 30
+                end
+                
+                if typeof(v) == "Instance" and v:IsA("BasePart") then
+                    -- Find closest player
+                    local closestPlayer = nil
+                    local shortestDistance = 20 -- Increased range
+                    
+                    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            local distance = (otherPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                            
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                closestPlayer = otherPlayer
+                            end
+                        end
+                    end
+                    
+                    if closestPlayer then
+                        args[i] = closestPlayer.Character.HumanoidRootPart
+                    end
+                end
+            end
+            
+            return oldNamecall(self, unpack(args))
+        end
+        
+        return oldNamecall(self, ...)
+    end)
+    
+    setStatus("Weapon reach increased (may not work in all games)")
+end
+
+-- Play animation
+function playAnimation(animType)
+    if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+        setStatus("Cannot play animation: character not found")
         return
     end
     
+    local animations = {
+        zombie = "rbxassetid://616158929",
+        ninja = "rbxassetid://656117400",
+        robot = "rbxassetid://3716636869",
+        dab = "rbxassetid://3303391864",
+        floss = "rbxassetid://5917459365",
+        groove = "rbxassetid://3303391864",
+        lay = "rbxassetid://3152378852",
+        sit = "rbxassetid://2506281703",
+        superhero = "rbxassetid://616088887",
+        spin = "rbxassetid://188632011"
+    }
+    
+    local animId = animations[animType]
+    if not animId then
+        setStatus("Animation not found: " .. animType)
+        return
+    end
+    
+    -- Play the animation
+    local anim = Instance.new("Animation")
+    anim.AnimationId = animId
+    
+    local animTrack = player.Character.Humanoid:LoadAnimation(anim)
+    animTrack:Play()
+    
+    setStatus(animType .. " animation playing")
+end
+
+-- Dance animation
+function playDanceAnimation()
+    local animations = {
+        "rbxassetid://507771019", -- Shuffle
+        "rbxassetid://429703734", -- Moonwalk
+        "rbxassetid://35654637",  -- Thriller
+        "rbxassetid://129423030", -- Breakdance
+        "rbxassetid://3189773368" -- Floss
+    }
+    
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        local animationIndex = math.random(1, #animations)
+        local anim = Instance.new("Animation")
+        anim.AnimationId = animations[animationIndex]
+        
+        local animTrack = player.Character.Humanoid:LoadAnimation(anim)
+        animTrack:Play()
+        
+        setStatus("Dance animation playing")
+    end
+end
+
+-- Fake chat message
+function fakeChatMessage(targetName, message)
+    local targetPlayer = getPlayerFromName(targetName)
+    
+    if not targetPlayer then
+        setStatus("Player not found")
+        return
+    end
+    
+    -- Find chat GUI
+    local chatGui = nil
+    
+    for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+        if gui.Name:lower():find("chat") then
+            chatGui = gui
+            break
+        end
+    end
+    
+    if not chatGui then
+        setStatus("Chat interface not found")
+        return
+    end
+    
+    -- Create fake message
+    local fakeMessageFrame = Instance.new("Frame")
+    fakeMessageFrame.Size = UDim2.new(1, 0, 0, 20)
+    fakeMessageFrame.BackgroundTransparency = 1
+    
+    local fakeMessageText = Instance.new("TextLabel")
+    fakeMessageText.Size = UDim2.new(1, 0, 1, 0)
+    fakeMessageText.BackgroundTransparency = 1
+    fakeMessageText.Font = Enum.Font.SourceSans
+    fakeMessageText.TextSize = 16
+    fakeMessageText.TextXAlignment = Enum.TextXAlignment.Left
+    fakeMessageText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    
+    -- Set team colors
+    if targetPlayer.Team then
+        fakeMessageText.TextColor3 = targetPlayer.TeamColor.Color
+    end
+    
+    fakeMessageText.Text = targetPlayer.Name .. ": " .. message
+    fakeMessageText.Parent = fakeMessageFrame
+    
+    -- Add message to chat history
+    for _, child in ipairs(chatGui:GetDescendants()) do
+        if child:IsA("ScrollingFrame") and child.Name:lower():find("chat") or child.Name:lower():find("message") then
+            fakeMessageFrame.Parent = child
+            break
+        end
+    end
+    
+    setStatus("Fake message sent")
+    
+    -- Remove message after a while
+    delay(10, function()
+        fakeMessageFrame:Destroy()
+    end)
+end
+
+-- Make character giant
+function makeGiantSize()
+    if player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Size = part.Size * 3
+            end
+        end
+        
+        if player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.HipHeight = player.Character.Humanoid.HipHeight * 3
+        end
+        
+        setStatus("Character size increased")
+    end
+end
+
+-- Make character tiny
+function makeTinySize()
+    if player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Size = part.Size * 0.5
+            end
+        end
+        
+        if player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.HipHeight = player.Character.Humanoid.HipHeight * 0.5
+        end
+        
+        setStatus("Character size decreased")
+    end
+end
+
+-- Create floating parts
+function createFloatingParts()
+    local parts = {}
+    local colors = {
+        Color3.fromRGB(255, 0, 0),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 0, 255),
+        Color3.fromRGB(255, 255, 0),
+        Color3.fromRGB(0, 255, 255),
+        Color3.fromRGB(255, 0, 255)
+    }
+    
+    -- Create 20 parts
+    for i = 1, 20 do
+        local part = Instance.new("Part")
+        part.Size = Vector3.new(1, 1, 1)
+        part.Anchored = true
+        part.CanCollide = false
+        part.BrickColor = BrickColor.new(colors[math.random(1, #colors)])
+        part.Material = Enum.Material.Neon
+        part.Shape = Enum.PartType.Ball
+        part.Parent = workspace
+        
+        table.insert(parts, part)
+    end
+    
+    -- Orbit parts around player
+    local angle = 0
+    local radius = 5
+    local angleStep = math.pi * 2 / #parts
+    local floatingLoop
+    
+    floatingLoop = RunService.Heartbeat:Connect(function()
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            -- Clean up if character disappears
+            for _, part in ipairs(parts) do
+                part:Destroy()
+            end
+            floatingLoop:Disconnect()
+            return
+        end
+        
+        angle = angle + 0.03
+        
+        for i, part in ipairs(parts) do
+            local x = math.cos(angle + i * angleStep) * radius
+            local y = math.sin(angle * 0.5) * 2 + 4
+            local z = math.sin(angle + i * angleStep) * radius
+            
+            part.Position = player.Character.HumanoidRootPart.Position + Vector3.new(x, y, z)
+        end
+    end)
+    
+    -- Clean up after 30 seconds
+    delay(30, function()
+        floatingLoop:Disconnect()
+        for _, part in ipairs(parts) do
+            part:Destroy()
+        end
+    end)
+    
+    setStatus("Floating parts created (30 seconds)")
+end
+
+-- Spin character
+function spinCharacter()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local spinSpeed = 10 -- Spin speed
+        local isSpinning = true
+        
+        local spinLoop
+        spinLoop = RunService.Heartbeat:Connect(function()
+            if not isSpinning or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                spinLoop:Disconnect()
+                return
+            end
+            
+            player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed), 0)
+        end)
+        
+        -- Stop spinning after 10 seconds
+        delay(10, function()
+            isSpinning = false
+            setStatus("Spinning stopped")
+        end)
+        
+        setStatus("Character spinning (10 seconds)")
+    end
+end
+
+-- Load Ultimate Fling script
+function loadUltimateFling()
+    setStatus("Loading Ultimate Fling...")
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/K1LAS1K/Ultimate-Fling-GUI/main/flingscript.lua"))()
+end
+
+-- Load Touch Fling script
+function loadTouchFling()
+    setStatus("Loading Touch Fling...")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/0Ben1/fe/main/obf_rf6iQURzu1fqrytcnLBAvW34C9N55kS9g9G3CKz086rC47M6632sEd4ZZYB0AYgV.lua.txt'))()
+end
+
+-- Spectate player
+function spectatePlayer(targetName)
     local targetPlayer = getPlayerFromName(targetName)
     
     if targetPlayer and targetPlayer.Character then
@@ -901,27 +1496,11 @@ end
 
 -- Go to player
 function goToPlayer(targetName)
-    -- If no name provided, show selector
-    if not targetName or targetName == "" then
-        showPlayerSelector(function(selectedPlayer)
-            goToPlayer(selectedPlayer.Name)
-        end)
-        return
-    end
-    
     teleportToPlayer(targetName) -- Use the same function
 end
 
 -- Bring player
 function bringPlayer(targetName)
-    -- If no name provided, show selector
-    if not targetName or targetName == "" then
-        showPlayerSelector(function(selectedPlayer)
-            bringPlayer(selectedPlayer.Name)
-        end)
-        return
-    end
-    
     local targetPlayer = getPlayerFromName(targetName)
     
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and
@@ -950,14 +1529,6 @@ end
 
 -- Fling player
 function flingPlayer(targetName)
-    -- If no name provided, show selector
-    if not targetName or targetName == "" then
-        showPlayerSelector(function(selectedPlayer)
-            flingPlayer(selectedPlayer.Name)
-        end)
-        return
-    end
-    
     local targetPlayer = getPlayerFromName(targetName)
     
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and
@@ -999,252 +1570,337 @@ function flingPlayer(targetName)
         setStatus("Player not found or unflingable")
     end
 end
--- Play animation
-function playAnimation(animType)
-    if not player.Character or not player.Character:FindFirstChild("Humanoid") then
-        setStatus("Cannot play animation: character not found")
-        return
-    end
-    
-    local animations = {
-        zombie = "rbxassetid://616158929",
-        ninja = "rbxassetid://656117400",
-        robot = "rbxassetid://3716636869",
-        dab = "rbxassetid://3303391864",
-        floss = "rbxassetid://5917459365",
-        groove = "rbxassetid://3303391864",
-        lay = "rbxassetid://3152378852",
-        sit = "rbxassetid://2506281703",
-        superhero = "rbxassetid://616088887",
-        spin = "rbxassetid://188632011",
-        punch = "rbxassetid://3175777639",   -- Added Punch animation
-        dino = "rbxassetid://3716636630"     -- Added Dino animation
-    }
-    
-    -- Play the animation directly
-    if animations[animType] then
-        local anim = Instance.new("Animation")
-        anim.AnimationId = animations[animType]
+
+-- Copy position
+function copyPosition()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local position = player.Character.HumanoidRootPart.Position
+        local posText = "Vector3.new(" .. tostring(position.X) .. ", " .. tostring(position.Y) .. ", " .. tostring(position.Z) .. ")"
         
-        local animTrack = player.Character.Humanoid:LoadAnimation(anim)
-        animTrack:Play()
-        
-        setStatus(animType .. " animation playing")
+        setclipboard(posText)
+        setStatus("Position copied: " .. posText)
     else
-        setStatus("Animation not found: " .. animType)
+        setStatus("Position copy failed")
     end
 end
 
--- Dance animation
-function playDanceAnimation()
-    local animations = {
-        "rbxassetid://507771019", -- Shuffle
-        "rbxassetid://429703734", -- Moonwalk
-        "rbxassetid://35654637",  -- Thriller
-        "rbxassetid://129423030", -- Breakdance
-        "rbxassetid://3189773368" -- Floss
+-- Give building tools
+function giveBTools()
+    local toolNames = {"Move", "Clone", "Delete", "Grab"}
+    
+    for _, toolName in ipairs(toolNames) do
+        local tool = Instance.new("HopperBin")
+        tool.Name = toolName
+        tool.BinType = Enum.BinType[toolName]
+        tool.Parent = player.Backpack
+    end
+    
+    setStatus("Building tools given")
+end
+
+-- Apply force field
+function applyForceField()
+    if player.Character then
+        local forceField = Instance.new("ForceField")
+        forceField.Parent = player.Character
+        
+        setStatus("Force field applied")
+    end
+end
+
+-- High jump
+function doHighJump()
+    if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("HumanoidRootPart") then
+        local jumpForce = 100
+        
+        -- Check if on ground
+        local isOnGround = player.Character.Humanoid:GetState() == Enum.HumanoidStateType.Running or
+                           player.Character.Humanoid:GetState() == Enum.HumanoidStateType.RunningNoPhysics
+        
+        if isOnGround then
+            -- Apply upward force with BodyVelocity
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Velocity = Vector3.new(0, jumpForce, 0)
+            bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+            bodyVelocity.Parent = player.Character.HumanoidRootPart
+            
+            -- Clean up after 0.2 seconds
+            delay(0.2, function()
+                bodyVelocity:Destroy()
+            end)
+            
+            setStatus("High jump executed")
+        else
+            setStatus("You must be on the ground to jump")
+        end
+    end
+end
+
+-- Swimming mode
+function toggleSwimMode()
+    local swimModeEnabled = not (getgenv().SwimModeConnection ~= nil)
+    
+    if swimModeEnabled then
+        getgenv().SwimModeConnection = RunService.Heartbeat:Connect(function()
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                -- Set humanoid state to swimming
+                player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+                
+                -- 3D movement with WASD
+                local moveDirection = player.Character.Humanoid.MoveDirection
+                
+                if moveDirection.Magnitude > 0 then
+                    player.Character.HumanoidRootPart.Velocity = camera.CFrame:VectorToWorldSpace(Vector3.new(
+                        moveDirection.X * 30,
+                        moveDirection.Y * 30,
+                        moveDirection.Z * 30
+                    ))
+                else
+                    player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+                end
+            end
+        end)
+        
+        setStatus("Swim mode enabled")
+    else
+        if getgenv().SwimModeConnection then
+            getgenv().SwimModeConnection:Disconnect()
+            getgenv().SwimModeConnection = nil
+        end
+        
+        -- Return character to normal state
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+        
+        setStatus("Swim mode disabled")
+    end
+end
+
+-- Rainbow character
+function makeRainbowCharacter()
+    if player.Character then
+        local rainbowSpeed = 2
+        local hue = 0
+        
+        local rainbowLoop
+        rainbowLoop = RunService.Heartbeat:Connect(function()
+            if not player.Character then
+                rainbowLoop:Disconnect()
+                return
+            end
+            
+            hue = (hue + rainbowSpeed) % 360
+            local color = Color3.fromHSV(hue/360, 1, 1)
+            
+            for _, part in ipairs(player.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.Color = color
+                end
+            end
+        end)
+        
+        -- Disable after 30 seconds
+        delay(30, function()
+            rainbowLoop:Disconnect()
+            setStatus("Rainbow effect ended")
+        end)
+        
+        setStatus("Rainbow character effect applied (30 seconds)")
+    end
+end
+
+-- Clear map (potentially harmful!)
+function clearMap()
+    -- Define what to protect for player and game mechanics safety
+    local protectedNames = {
+        "Workspace", "Camera", "Terrain", "SpawnLocation", "Players", "Script", "LocalScript", "StarterPack",
+        "StarterGui", "StarterPlayer", "TouchTransmitter"
     }
     
-    if player.Character and player.Character:FindFirstChild("Humanoid") then
-        local animationIndex = math.random(1, #animations)
-        local anim = Instance.new("Animation")
-        anim.AnimationId = animations[animationIndex]
-        
-        local animTrack = player.Character.Humanoid:LoadAnimation(anim)
-        animTrack:Play()
-        
-        setStatus("Dance animation playing")
-    end
-end
--- Load Ultimate Fling script
-function loadUltimateFling()
-    setStatus("Loading Ultimate Fling...")
-    
-    -- First try to remove any existing GUIs
-    for _, gui in pairs(game:GetService("CoreGui"):GetChildren()) do
-        if gui.Name == "ScreenGui" and gui:FindFirstChild("Main") and gui:FindFirstChild("Main"):FindFirstChild("Title") then
-            if gui.Main.Title.Text:find("Fling") then
-                gui:Destroy()
+    local function isProtected(obj)
+        for _, name in ipairs(protectedNames) do
+            if obj.Name:find(name) or obj:IsA(name) or obj:IsDescendantOf(Players) then
+                return true
             end
         end
+        return false
     end
     
-    -- Load the script with KILASIK branding
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/K1LAS1K/Ultimate-Fling-GUI/main/flingscript.lua"):gsub("Credit : X", "Credit : KILASIK"))()
-end
-
--- Load Touch Fling script
-function loadTouchFling()
-    setStatus("Loading Touch Fling...")
+    local removedCount = 0
+    local maxRemove = 100 -- Safety limit to prevent crashing
     
-    -- Remove any existing touch fling GUIs
-    for _, gui in pairs(game:GetService("CoreGui"):GetChildren()) do
-        if gui.Name == "ScreenGui" and gui:FindFirstChild("Frame") and gui:FindFirstChild("Frame"):FindFirstChild("TextButton") then
-            gui:Destroy()
-        end
-    end
-    
-    -- Load modified script with close button
-    loadstring([[
-        -- Modified Touch Fling with close button and KILASIK branding
-        local ScreenGui = Instance.new("ScreenGui")
-        local Frame = Instance.new("Frame")
-        local Title = Instance.new("TextLabel")
-        local TextButton = Instance.new("TextButton")
-        local TextButton_2 = Instance.new("TextButton")
-        local CloseButton = Instance.new("TextButton")
-
-        ScreenGui.Name = "ScreenGui"
-        ScreenGui.Parent = game:GetService("CoreGui")
-        ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-        Frame.Parent = ScreenGui
-        Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Frame.Position = UDim2.new(0.0198863633, 0, 0.0564263314, 0)
-        Frame.Size = UDim2.new(0, 200, 0, 100)
-        Frame.Active = true
-        Frame.Draggable = true
-
-        Title.Name = "Title"
-        Title.Parent = Frame
-        Title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        Title.BackgroundTransparency = 1.000
-        Title.Size = UDim2.new(0, 200, 0, 30)
-        Title.Font = Enum.Font.GothamSemibold
-        Title.Text = "KILASIK Touch Fling"
-        Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Title.TextSize = 14.000
-
-        CloseButton.Name = "CloseButton"
-        CloseButton.Parent = Frame
-        CloseButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        CloseButton.Position = UDim2.new(1, -25, 0, 5)
-        CloseButton.Size = UDim2.new(0, 20, 0, 20)
-        CloseButton.Font = Enum.Font.GothamBold
-        CloseButton.Text = "X"
-        CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        CloseButton.TextSize = 14.000
-
-        TextButton.Parent = Frame
-        TextButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        TextButton.Position = UDim2.new(0.104999997, 0, 0.419999987, 0)
-        TextButton.Size = UDim2.new(0, 79, 0, 31)
-        TextButton.Font = Enum.Font.GothamSemibold
-        TextButton.Text = "Fling"
-        TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        TextButton.TextSize = 14.000
-
-        TextButton_2.Parent = Frame
-        TextButton_2.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        TextButton_2.Position = UDim2.new(0.560000002, 0, 0.419999987, 0)
-        TextButton_2.Size = UDim2.new(0, 79, 0, 31)
-        TextButton_2.Font = Enum.Font.GothamSemibold
-        TextButton_2.Text = "Unfling"
-        TextButton_2.TextColor3 = Color3.fromRGB(255, 255, 255)
-        TextButton_2.TextSize = 14.000
-
-        CloseButton.MouseButton1Click:Connect(function()
-            ScreenGui:Destroy()
-        end)
-        
-        -- Rest of the original touch fling code
-        TextButton.MouseButton1Down:Connect(function()
-            local speaker = game.Players.LocalPlayer
-            local ch = speaker.Character
-            local hum = ch and ch:FindFirstChildWhichIsA("Humanoid")
-            if speaker and ch and hum then
-                hum:UnequipTools()
-                for _, child in ipairs(ch:GetChildren()) do
-                    if child:IsA("BasePart") then
-                        child.CustomPhysicalProperties = PhysicalProperties.new(math.huge, math.huge, math.huge)
-                    end
-                end
-                repeat wait() until ch:FindFirstChildOfClass("Tool")
-                local tool = ch:FindFirstChildOfClass("Tool")
-                local handle = tool and tool:FindFirstChild("Handle")
-                if handle then
-                    for _, child in ipairs(ch:GetChildren()) do
-                        if child:IsA("BasePart") then
-                            child.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
-                        end
-                    end
-                    handle.CustomPhysicalProperties = PhysicalProperties.new(math.huge, math.huge, math.huge)
-                    local bat = speaker.Backpack:FindFirstChild("HumanoidRootPart")
-                    if not bat then
-                        bat = Instance.new("Part")
-                        bat.Name = "HumanoidRootPart"
-                    end
-                    bat.Parent = speaker.Backpack
-                    bat.CanCollide = false
-                    bat.Size = Vector3.new(100, 100, 100)
-                    bat.Massless = true
-                    bat.Transparency = 1
-                    local bg = Instance.new("BodyGyro")
-                    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                    bg.P = 1000000
-                    bg.CFrame = ch:GetModelCFrame()
-                    bg.Parent = bat
-                    local bp = Instance.new("BodyPosition")
-                    bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                    bp.P = 1000000
-                    bp.D = 0
-                    bp.Position = ch:GetModelCFrame().Position
-                    bp.Parent = bat
-                    ch.PrimaryPart = ch.HumanoidRootPart
-                    ch:SetPrimaryPartCFrame(ch:GetModelCFrame() * CFrame.new(0, 0, 0))
-                    tool.Parent = speaker.Backpack
-                    wait()
-                    tool.Parent = ch
-                    wait()
-                    ch:SetPrimaryPartCFrame(ch:GetModelCFrame() * CFrame.new(0, 0, 0))
-                    hum:UnequipTools()
-                    wait()
-                    for _, child in ipairs(ch:GetChildren()) do
-                        if child:IsA("BasePart") then
-                            child.Massless = true
-                        end
-                    end
-                    ch.HumanoidRootPart.Massless = true
-                    local bambam = Instance.new("BodyAngularVelocity")
-                    bambam.Name = "SPINNER"
-                    bambam.Parent = ch.HumanoidRootPart
-                    bambam.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                    bambam.AngularVelocity = Vector3.new(999999999999999999999999999999999999999999999999, 999999999999999999999999999999999999999999999999, 999999999999999999999999999999999999999999999999)
-                    bambam.P = 1000000000000000000000000000000
-                    for _, child in ipairs(ch:GetChildren()) do
-                        if child:IsA("BasePart") then
-                            child.Massless = false
-                            child.CustomPhysicalProperties = PhysicalProperties.new(math.huge, math.huge, math.huge, math.huge, math.huge)
-                        end
-                    end
-                    ch.HumanoidRootPart.Massless = false
-                    ch.HumanoidRootPart.CustomPhysicalProperties = PhysicalProperties.new(math.huge, math.huge, math.huge, math.huge, math.huge)
-                end
-            end
-        end)
-
-        TextButton_2.MouseButton1Down:Connect(function()
-            local speaker = game.Players.LocalPlayer
-            local ch = speaker.Character
-            local hum = ch and ch:FindFirstChildWhichIsA("Humanoid")
-
-            if hum then
-                local root = speaker.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local spinner = root:FindFirstChild("SPINNER")
-                    if spinner then
-                        spinner:Destroy()
-                    end
-                end
-            end
-
-            wait(0.1)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if not isProtected(obj) and obj:IsA("BasePart") and obj.Anchored then
+            obj.Transparency = 1
+            obj.CanCollide = false
+            removedCount = removedCount + 1
             
-            game.Players.LocalPlayer.Character:BreakJoints()
-        end)
-    ]])()
+            if removedCount >= maxRemove then
+                break
+            end
+        end
+    end
+    
+    setStatus("Hid " .. removedCount .. " map objects (made transparent)")
 end
+
+-- Low graphics settings
+function setLowGraphics()
+    -- Lower graphics quality
+    settings().Rendering.QualityLevel = 1
+    
+    -- Disable shadows and effects
+    game:GetService("Lighting").GlobalShadows = false
+    game:GetService("Lighting").ShadowSoftness = 0
+    
+    -- Uncap FPS
+    setfpscap(9999)
+    
+    -- Reduce render distance
+    settings().Rendering.EagerBulkExecution = false
+    
+    -- Simplify objects
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Material = Enum.Material.SmoothPlastic
+            
+            -- Remove special effects
+            for _, child in ipairs(part:GetChildren()) do
+                if child:IsA("ParticleEmitter") or child:IsA("Trail") or child:IsA("Smoke") or child:IsA("Fire") then
+                    child.Enabled = false
+                end
+            end
+        end
+    end
+    
+    setStatus("Low graphics settings applied")
+end
+
+-- Remove textures
+function removeTextures()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.Material = Enum.Material.SmoothPlastic
+            
+            -- Remove Decal, Texture and other visual elements
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("Decal") or child:IsA("Texture") then
+                    child.Transparency = 1
+                end
+            end
+        end
+    end
+    
+    setStatus("Textures removed")
+end
+
+-- Show hitboxes
+function showHitboxes()
+    local hitboxesEnabled = not (getgenv().HitboxConnection ~= nil)
+    
+    if hitboxesEnabled then
+        local hitboxes = {}
+        
+        -- Create hitboxes for other players
+        for _, otherPlayer in ipairs(Players:GetPlayers()) do
+            if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                for _, part in ipairs(otherPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        local hitbox = Instance.new("BoxHandleAdornment")
+                        hitbox.Name = "Hitbox"
+                        hitbox.Adornee = part
+                        hitbox.Color3 = Color3.fromRGB(255, 0, 0)
+                        hitbox.Transparency = 0.7
+                        hitbox.AlwaysOnTop = true
+                        hitbox.ZIndex = 10
+                        hitbox.Size = part.Size
+                        hitbox.Parent = part
+                        
+                        table.insert(hitboxes, hitbox)
+                    end
+                end
+            end
+        end
+        
+        -- Create update loop
+        getgenv().HitboxConnection = RunService.Heartbeat:Connect(function()
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    -- Check character parts for hitboxes
+                    for _, part in ipairs(otherPlayer.Character:GetDescendants()) do
+                        if part:IsA("BasePart") and not part:FindFirstChild("Hitbox") then
+                            local hitbox = Instance.new("BoxHandleAdornment")
+                            hitbox.Name = "Hitbox"
+                            hitbox.Adornee = part
+                            hitbox.Color3 = Color3.fromRGB(255, 0, 0)
+                            hitbox.Transparency = 0.7
+                            hitbox.AlwaysOnTop = true
+                            hitbox.ZIndex = 10
+                            hitbox.Size = part.Size
+                            hitbox.Parent = part
+                            
+                            table.insert(hitboxes, hitbox)
+                        end
+                    end
+                end
+            end
+        end)
+        
+        setStatus("Hitboxes visible")
+    else
+        if getgenv().HitboxConnection then
+            getgenv().HitboxConnection:Disconnect()
+            getgenv().HitboxConnection = nil
+        end
+        
+        -- Clean up all hitboxes
+        for _, plyr in ipairs(Players:GetPlayers()) do
+            if plyr.Character then
+                for _, part in ipairs(plyr.Character:GetDescendants()) do
+                    if part:IsA("BoxHandleAdornment") and part.Name == "Hitbox" then
+                        part:Destroy()
+                    end
+                end
+            end
+        end
+        
+        setStatus("Hitboxes hidden")
+    end
+end
+
+-- Load Infinite Yield
+function loadInfiniteYield()
+    setStatus("Loading Infinite Yield admin...")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+end
+
+-- Anti AFK
+function enableAntiAFK()
+    local VirtualUser = game:GetService("VirtualUser")
+    
+    -- When the game detects AFK, simulate user input
+    player.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        setStatus("Anti-AFK: Prevented kick")
+    end)
+    
+    setStatus("Anti-AFK enabled")
+end
+
+-- Fix camera issues
+function fixCamera()
+    -- Reset camera to default
+    workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+    workspace.CurrentCamera.CameraSubject = player.Character.Humanoid
+    
+    -- Fix camera orientation
+    workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, player.Character.HumanoidRootPart.Position)
+    
+    setStatus("Camera fixed")
+end
+
 -- Toggle a command as favorite
 function toggleFavorite(commandName)
     local index = nil
@@ -1267,10 +1923,12 @@ function toggleFavorite(commandName)
         setStatus(commandName .. " added to favorites")
     end
     
-    -- Save favorites immediately
-    saveFavorites()
+    -- Save favorites
+    if writefile then
+        writefile("KILASIK_favorites.json", HttpService:JSONEncode(favoriteCommands))
+    end
     
-    -- Update favorites tab if active
+    -- Update favorites tab
     if activeTab == "Favorites" then
         updateCommandList("")
     end
@@ -1286,41 +1944,222 @@ function isCommandFavorite(commandName)
     return false
 end
 
--- Save favorites
-function saveFavorites()
-    -- Store in global for session persistence
-    _G.KILASIK_FAVORITES = favoriteCommands
-    
-    -- Also save to file if writefile is available
-    if writefile then
-        local success, err = pcall(function()
-            writefile("KILASIK_favorites.json", HttpService:JSONEncode(favoriteCommands))
-        end)
-        if not success then
-            warn("Failed to save favorites: " .. tostring(err))
-        end
-    end
-end
-
 -- Load favorites
 function loadFavorites()
-    -- First try to load from global variable
-    if _G.KILASIK_FAVORITES then
-        favoriteCommands = _G.KILASIK_FAVORITES
-        return
-    end
-    
-    -- Then try to load from file
     if readfile and isfile and isfile("KILASIK_favorites.json") then
         local success, result = pcall(function()
             return HttpService:JSONDecode(readfile("KILASIK_favorites.json"))
         end)
         
-        if success and type(result) == "table" then
+        if success and typeof(result) == "table" then
             favoriteCommands = result
         end
     end
 end
+
+-- =====================
+-- GUI Creation
+-- =====================
+
+-- Show status message
+local statusLabel = nil
+function setStatus(text)
+    if not statusLabel then return end
+    statusLabel.Text = text
+    
+    delay(5, function()
+        -- Reset text after 5 seconds
+        if statusLabel and statusLabel.Text == text then
+            statusLabel.Text = "Ready"
+        end
+    end)
+end
+
+-- Key verification GUI
+function createKeyVerificationGUI()
+    -- Try to use CoreGui (some executors won't allow)
+    local container = nil
+    pcall(function()
+        container = game:GetService("CoreGui")
+    end)
+    
+    if not container then
+        container = player.PlayerGui
+    end
+    
+    -- Main GUI
+    local keyGUI = Instance.new("ScreenGui")
+    keyGUI.Name = "KILASIK_KeyVerification"
+    keyGUI.ResetOnSpawn = false
+    keyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    keyGUI.Parent = container
+    
+    -- Background
+    local background = Instance.new("Frame")
+    background.Size = UDim2.new(0, 350, 0, 250)
+    background.Position = UDim2.new(0.5, -175, 0.5, -125)
+    background.BackgroundColor3 = colors.background
+    background.BorderSizePixel = 0
+    background.Parent = keyGUI
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 10)
+    uiCorner.Parent = background
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = colors.header
+    title.BorderSizePixel = 0
+    title.Text = "KILASIK GUI - Key Verification"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextColor3 = colors.text
+    title.Parent = background
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 10)
+    titleCorner.Parent = title
+    
+    local titleCoverBar = Instance.new("Frame")
+    titleCoverBar.Size = UDim2.new(1, 0, 0, 10)
+    titleCoverBar.Position = UDim2.new(0, 0, 1, -10)
+    titleCoverBar.BackgroundColor3 = colors.header
+    titleCoverBar.BorderSizePixel = 0
+    titleCoverBar.ZIndex = 0
+    titleCoverBar.Parent = title
+    
+    -- Description
+    local description = Instance.new("TextLabel")
+    description.Size = UDim2.new(1, -40, 0, 40)
+    description.Position = UDim2.new(0, 20, 0, 50)
+    description.BackgroundTransparency = 1
+    description.Text = "You need a valid key to use this GUI."
+    description.Font = Enum.Font.Gotham
+    description.TextSize = 14
+    description.TextWrapped = true
+    description.TextColor3 = colors.text
+    description.Parent = background
+    
+    -- Input box
+    local inputBox = Instance.new("TextBox")
+    inputBox.Size = UDim2.new(1, -40, 0, 35)
+    inputBox.Position = UDim2.new(0, 20, 0, 95)
+    inputBox.BackgroundColor3 = colors.neutralDark
+    inputBox.PlaceholderText = "Enter key here..."
+    inputBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    inputBox.Text = ""
+    inputBox.Font = Enum.Font.Gotham
+    inputBox.TextSize = 14
+    inputBox.TextColor3 = colors.text
+    inputBox.BorderSizePixel = 0
+    inputBox.ClearTextOnFocus = false
+    inputBox.Parent = background
+    
+    local inputBoxCorner = Instance.new("UICorner")
+    inputBoxCorner.CornerRadius = UDim.new(0, 6)
+    inputBoxCorner.Parent = inputBox
+    
+    -- Discord button
+    local discordButton = Instance.new("TextButton")
+    discordButton.Size = UDim2.new(1, -40, 0, 35)
+    discordButton.Position = UDim2.new(0, 20, 0, 140)
+    discordButton.BackgroundColor3 = Color3.fromRGB(114, 137, 218) -- Discord color
+    discordButton.Text = "Get Key from Discord"
+    discordButton.Font = Enum.Font.GothamBold
+    discordButton.TextSize = 14
+    discordButton.TextColor3 = colors.text
+    discordButton.BorderSizePixel = 0
+    discordButton.AutoButtonColor = false
+    discordButton.Parent = background
+    
+    local discordCorner = Instance.new("UICorner")
+    discordCorner.CornerRadius = UDim.new(0, 6)
+    discordCorner.Parent = discordButton
+    
+    -- Verify button
+    local verifyButton = Instance.new("TextButton")
+    verifyButton.Size = UDim2.new(1, -40, 0, 35)
+    verifyButton.Position = UDim2.new(0, 20, 0, 185)
+    verifyButton.BackgroundColor3 = colors.highlight
+    verifyButton.Text = "Verify"
+    verifyButton.Font = Enum.Font.GothamBold
+    verifyButton.TextSize = 16
+    verifyButton.TextColor3 = colors.text
+    verifyButton.BorderSizePixel = 0
+    verifyButton.AutoButtonColor = false
+    verifyButton.Parent = background
+    
+    local verifyButtonCorner = Instance.new("UICorner")
+    verifyButtonCorner.CornerRadius = UDim.new(0, 6)
+    verifyButtonCorner.Parent = verifyButton
+    
+    -- Result label
+    local resultLabel = Instance.new("TextLabel")
+    resultLabel.Size = UDim2.new(1, -40, 0, 20)
+    resultLabel.Position = UDim2.new(0, 20, 0, 230)
+    resultLabel.BackgroundTransparency = 1
+    resultLabel.Text = ""
+    resultLabel.Font = Enum.Font.Gotham
+    resultLabel.TextSize = 14
+    resultLabel.TextColor3 = colors.warning
+    resultLabel.Parent = background
+    
+    -- Button hover effects
+    discordButton.MouseEnter:Connect(function()
+        discordButton.BackgroundColor3 = Color3.fromRGB(130, 150, 230) -- Lighter Discord color
+    end)
+    
+    discordButton.MouseLeave:Connect(function()
+        discordButton.BackgroundColor3 = Color3.fromRGB(114, 137, 218)
+    end)
+    
+    verifyButton.MouseEnter:Connect(function()
+        verifyButton.BackgroundColor3 = Color3.fromRGB(90, 150, 200)
+    end)
+    
+    verifyButton.MouseLeave:Connect(function()
+        verifyButton.BackgroundColor3 = colors.highlight
+    end)
+    
+    -- Discord button function
+    discordButton.MouseButton1Click:Connect(function()
+        setclipboard(DISCORD_LINK)
+        resultLabel.Text = "Discord link copied to clipboard!"
+        resultLabel.TextColor3 = colors.success
+    end)
+    
+    -- Key verification function
+    verifyButton.MouseButton1Click:Connect(function()
+        local inputKey = inputBox.Text
+        
+        if inputKey == KEY_CODE then
+            resultLabel.Text = "Key verified! Loading GUI..."
+            resultLabel.TextColor3 = colors.success
+            
+            keyVerified = true
+            
+            -- Load GUI
+            delay(1, function()
+                keyGUI:Destroy()
+                createMainGUI()
+            end)
+        else
+            resultLabel.Text = "Invalid key! Please try again."
+            resultLabel.TextColor3 = colors.warning
+            
+            -- Error effect
+            local originalColor = inputBox.BackgroundColor3
+            inputBox.BackgroundColor3 = colors.warning
+            delay(0.5, function()
+                inputBox.BackgroundColor3 = originalColor
+            end)
+        end
+    end)
+    
+    return keyGUI
+end
+
 -- Create main GUI
 function createMainGUI()
     if guiCreated then return end
@@ -1355,12 +2194,6 @@ function createMainGUI()
     mainFrame.Active = true
     mainFrame.Draggable = true
     mainFrame.Parent = mainGUI
-    
-    -- Add size constraints
-    local sizeConstraint = Instance.new("UISizeConstraint")
-    sizeConstraint.MinSize = Vector2.new(400, 250)
-    sizeConstraint.MaxSize = Vector2.new(800, 600)
-    sizeConstraint.Parent = mainFrame
     
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 10)
@@ -1449,27 +2282,14 @@ function createMainGUI()
     miniCorner.CornerRadius = UDim.new(0, 6)
     miniCorner.Parent = miniButton
     
-    -- Category SCROLLING frame (fixed)
-    local categoryScrollFrame = Instance.new("ScrollingFrame")
-    categoryScrollFrame.Name = "CategoryScrollFrame"
-    categoryScrollFrame.Size = UDim2.new(0, 130, 1, -40)
-    categoryScrollFrame.Position = UDim2.new(0, 0, 0, 40)
-    categoryScrollFrame.BackgroundColor3 = colors.categoryBG
-    categoryScrollFrame.BorderSizePixel = 0
-    categoryScrollFrame.ScrollBarThickness = 6
-    categoryScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
-    categoryScrollFrame.CanvasSize = UDim2.new(0, 0, 0, #categories * 40 + 20) -- Dynamic size based on categories
-    categoryScrollFrame.Parent = mainFrame
-    
-    -- Category layout
-    local categoryLayout = Instance.new("UIListLayout")
-    categoryLayout.Padding = UDim.new(0, 5)
-    categoryLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    categoryLayout.Parent = categoryScrollFrame
-    
-    local categoryPadding = Instance.new("UIPadding")
-    categoryPadding.PaddingTop = UDim.new(0, 10)
-    categoryPadding.Parent = categoryScrollFrame
+    -- Category tab
+    local categoryFrame = Instance.new("Frame")
+    categoryFrame.Name = "CategoryFrame"
+    categoryFrame.Size = UDim2.new(0, 130, 1, -40)
+    categoryFrame.Position = UDim2.new(0, 0, 0, 40)
+    categoryFrame.BackgroundColor3 = colors.categoryBG
+    categoryFrame.BorderSizePixel = 0
+    categoryFrame.Parent = mainFrame
     
     local categoryButtons = {}
     
@@ -1478,6 +2298,7 @@ function createMainGUI()
         local categoryButton = Instance.new("TextButton")
         categoryButton.Name = category .. "Button"
         categoryButton.Size = UDim2.new(1, -20, 0, 35)
+        categoryButton.Position = UDim2.new(0, 10, 0, 10 + (i-1) * 40)
         categoryButton.BackgroundColor3 = category == activeTab and colors.buttonSelected or colors.button
         categoryButton.Text = category
         categoryButton.Font = Enum.Font.GothamSemibold
@@ -1485,7 +2306,7 @@ function createMainGUI()
         categoryButton.TextColor3 = colors.text
         categoryButton.BorderSizePixel = 0
         categoryButton.AutoButtonColor = false
-        categoryButton.Parent = categoryScrollFrame
+        categoryButton.Parent = categoryFrame
         
         local categoryCorner = Instance.new("UICorner")
         categoryCorner.CornerRadius = UDim.new(0, 6)
@@ -1630,7 +2451,7 @@ function createMainGUI()
     creditLabel.BackgroundColor3 = colors.categoryBG
     creditLabel.Text = "KILASIK"
     creditLabel.Font = Enum.Font.GothamBold
-    creditLabel.TextSize = 16
+    creditLabel.TextSize = 14
     creditLabel.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold color
     creditLabel.BorderSizePixel = 0
     creditLabel.Parent = mainFrame
@@ -1659,77 +2480,6 @@ function createMainGUI()
     miniLogoText.TextSize = 30
     miniLogoText.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold
     miniLogoText.Parent = miniLogo
-    
-    -- Add resize handlers for the corners
-    local resizeHandles = {}
-    local resizeCorners = {
-        {name = "TopLeft", position = UDim2.new(0, -5, 0, -5), cursorIcon = "rbxassetid://5018426553"},
-        {name = "TopRight", position = UDim2.new(1, -5, 0, -5), cursorIcon = "rbxassetid://5018435460"},
-        {name = "BottomLeft", position = UDim2.new(0, -5, 1, -5), cursorIcon = "rbxassetid://5018441963"},
-        {name = "BottomRight", position = UDim2.new(1, -5, 1, -5), cursorIcon = "rbxassetid://5018451215"}
-    }
-    
-    for _, corner in ipairs(resizeCorners) do
-        local handle = Instance.new("TextButton")
-        handle.Name = corner.name .. "Resize"
-        handle.Size = UDim2.new(0, 10, 0, 10)
-        handle.Position = corner.position
-        handle.BackgroundColor3 = colors.highlight
-        handle.Text = ""
-        handle.BorderSizePixel = 0
-        handle.ZIndex = 10
-        handle.Parent = mainFrame
-        
-        local handleCorner = Instance.new("UICorner")
-        handleCorner.CornerRadius = UDim.new(1, 0)
-        handleCorner.Parent = handle
-        
-        table.insert(resizeHandles, handle)
-        
-        -- Resize logic based on corner
-        local dragging = false
-        local startPos = nil
-        local startSize = nil
-        
-        handle.MouseButton1Down:Connect(function(x, y)
-            dragging = true
-            startPos = Vector2.new(x, y)
-            startSize = mainFrame.Size
-        end)
-        
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
-        end)
-        
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local delta = Vector2.new(input.Position.X, input.Position.Y) - startPos
-                local newSize = startSize
-                
-                if corner.name == "TopLeft" then
-                    newSize = UDim2.new(startSize.X.Scale, startSize.X.Offset - delta.X, startSize.Y.Scale, startSize.Y.Offset - delta.Y)
-                elseif corner.name == "TopRight" then
-                    newSize = UDim2.new(startSize.X.Scale, startSize.X.Offset + delta.X, startSize.Y.Scale, startSize.Y.Offset - delta.Y)
-                elseif corner.name == "BottomLeft" then
-                    newSize = UDim2.new(startSize.X.Scale, startSize.X.Offset - delta.X, startSize.Y.Scale, startSize.Y.Offset + delta.Y)
-                elseif corner.name == "BottomRight" then
-                    newSize = UDim2.new(startSize.X.Scale, startSize.X.Offset + delta.X, startSize.Y.Scale, startSize.Y.Offset + delta.Y)
-                end
-                
-                -- Apply size constraints
-                newSize = UDim2.new(
-                    startSize.X.Scale,
-                    math.clamp(newSize.X.Offset, sizeConstraint.MinSize.X, sizeConstraint.MaxSize.X),
-                    startSize.Y.Scale,
-                    math.clamp(newSize.Y.Offset, sizeConstraint.MinSize.Y, sizeConstraint.MaxSize.Y)
-                )
-                
-                mainFrame.Size = newSize
-            end
-        end)
-    end
     
     -- Hover and Click Effects
     closeButton.MouseEnter:Connect(function()
@@ -1767,13 +2517,13 @@ function createMainGUI()
         
         if minimized then
             contentFrame.Visible = false
-            categoryScrollFrame.Visible = false
+            categoryFrame.Visible = false
             statusBar.Visible = false
             creditLabel.Visible = false
             mainFrame.Size = UDim2.new(0, 550, 0, 40)
         else
             contentFrame.Visible = true
-            categoryScrollFrame.Visible = true
+            categoryFrame.Visible = true
             statusBar.Visible = true
             creditLabel.Visible = true
             mainFrame.Size = UDim2.new(0, 550, 0, 350)
@@ -1976,3 +2726,25 @@ function createMainGUI()
     
     return mainGUI
 end
+
+-- =====================
+-- Main Function
+-- =====================
+
+-- Start GUI
+if not keyVerified then
+    createKeyVerificationGUI()
+else
+    createMainGUI()
+end
+
+-- Infinite jump event
+UserInputService.JumpRequest:Connect(function()
+    if infiniteJump and player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Startup message
+print("KILASIK GUI loaded! Key: " .. KEY_CODE)
+print("Use RightControl to toggle GUI.")
