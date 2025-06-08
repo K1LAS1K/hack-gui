@@ -75,6 +75,13 @@ local aimbotTarget = nil
 local selectedPlayers = {}
 local selectedParts = {}
 
+-- Player list variables for GUI
+local playerListFrame = nil
+local playerListVisible = false
+
+-- DAB Animation tracking
+local dabAnimationTrack = nil
+
 -- GUI Colors
 local colors = {
     background = Color3.fromRGB(25, 25, 30),
@@ -132,9 +139,9 @@ end
 
 -- All Commands
 local commands = {
-    -- Main commands
-    {name = "Speed", desc = "Set character walk speed", category = "Character", func = function(speed) setWalkSpeed(tonumber(speed) or 16) end, canFavorite = true, type = "input", inputType = "number", currentValue = function() return walkSpeed end},
-    {name = "JumpPower", desc = "Set character jump power", category = "Character", func = function(power) setJumpPower(tonumber(power) or 50) end, canFavorite = true, type = "input", inputType = "number", currentValue = function() return jumpPower end},
+    -- Main commands - WITH SETTINGS PANELS
+    {name = "Speed", desc = "Set character walk speed", category = "Character", func = function(speed) if speed then setWalkSpeed(tonumber(speed) or 16) else showSpeedSettings() end end, canFavorite = true, type = "settings", inputType = "number", currentValue = function() return walkSpeed end},
+    {name = "JumpPower", desc = "Set character jump power", category = "Character", func = function(power) if power then setJumpPower(tonumber(power) or 50) else showJumpSettings() end end, canFavorite = true, type = "settings", inputType = "number", currentValue = function() return jumpPower end},
     {name = "InfiniteJump", desc = "Jump infinitely", category = "Character", func = function() toggleInfiniteJump() end, canFavorite = true, type = "toggle"},
     {name = "Fly", desc = "Toggle fly mode", category = "Character", func = function() toggleFly() end, canFavorite = true, type = "toggle"},
     {name = "Noclip", desc = "Walk through walls", category = "Character", func = function() toggleNoclip() end, canFavorite = true, type = "toggle"},
@@ -149,7 +156,7 @@ local commands = {
     {name = "Aimbot", desc = "Auto aim at players", category = "Combat", func = function() toggleAimbot() end, canFavorite = true, type = "toggle"},
     {name = "Teleport", desc = "Teleport to mouse position", category = "Teleport", func = function() teleportToMouse() end, canFavorite = true, type = "button"},
     {name = "ClickTP", desc = "Click to teleport (Ctrl+Click)", category = "Teleport", func = function() toggleClickTP() end, canFavorite = true, type = "toggle"},
-    {name = "TpToPlayer", desc = "Teleport to a specific player", category = "Teleport", func = function(playerName) teleportToPlayer(playerName) end, canFavorite = true, type = "input", inputType = "text"},
+    {name = "TpToPlayer", desc = "Teleport to a specific player", category = "Teleport", func = function() showPlayerList("teleport") end, canFavorite = true, type = "button"},
     {name = "GetPosition", desc = "Copy current position", category = "Teleport", func = function() copyPosition() end, canFavorite = true, type = "button"},
     {name = "Rejoin", desc = "Rejoin the same server", category = "Utility", func = function() rejoinServer() end, canFavorite = true, type = "button"},
     {name = "NoFog", desc = "Remove fog", category = "Vision", func = function() removeFog() end, canFavorite = true, type = "toggle"},
@@ -157,44 +164,24 @@ local commands = {
     {name = "Invisible", desc = "Make character invisible", category = "Character", func = function() makeInvisible() end, canFavorite = true, type = "toggle"},
     {name = "RemoveMesh", desc = "Remove meshes", category = "Character", func = function() removeMeshes() end, canFavorite = true, type = "toggle"},
     
-    -- Combat commands
+    -- Combat commands - WORKING ONLY
+    {name = "Aimbot", desc = "Auto aim at players", category = "Combat", func = function() toggleAimbot() end, canFavorite = true, type = "toggle"},
     {name = "Aimbot Settings", desc = "Configure aimbot options", category = "Combat", func = function() showAimbotSettings() end, canFavorite = true, type = "button"},
-    {name = "Aimbot FOV", desc = "Set aimbot field of view", category = "Combat", func = function(size) setAimbotFOV(tonumber(size) or 100) end, canFavorite = true, type = "input", inputType = "number", currentValue = function() return aimbotSettings.fovSize end},
-    {name = "Wallbang", desc = "Shoot through walls", category = "Combat", func = function() toggleWallbang() end, canFavorite = true, type = "toggle"},
-    {name = "KillAura", desc = "Auto hit nearby players", category = "Combat", func = function() toggleKillAura() end, canFavorite = true, type = "toggle"},
-    {name = "InfiniteAmmo", desc = "Unlimited ammo", category = "Combat", func = function() giveInfiniteAmmo() end, canFavorite = true, type = "button"},
-    {name = "GodMode", desc = "Try god mode", category = "Combat", func = function() attemptGodMode() end, canFavorite = true, type = "button"},
-    {name = "AutoFarm", desc = "Auto collect resources", category = "Utility", func = function() toggleAutoFarm() end, canFavorite = true, type = "toggle"},
-    {name = "Reach", desc = "Increase weapon reach", category = "Combat", func = function() increaseReach() end, canFavorite = true, type = "button"},
     
-    -- Animation commands
-    {name = "Zombie", desc = "Play zombie animation", category = "Animations", func = function() playAnimation("zombie") end, canFavorite = true, type = "button"},
-    {name = "Ninja", desc = "Play ninja animation", category = "Animations", func = function() playAnimation("ninja") end, canFavorite = true, type = "button"},
-    {name = "Robot", desc = "Play robot animation", category = "Animations", func = function() playAnimation("robot") end, canFavorite = true, type = "button"},
-    {name = "Dab", desc = "Play dab animation", category = "Animations", func = function() playAnimation("dab") end, canFavorite = true, type = "button"},
-    {name = "Floss", desc = "Play floss dance", category = "Animations", func = function() playAnimation("floss") end, canFavorite = true, type = "button"},
-    {name = "Groove", desc = "Play groove dance", category = "Animations", func = function() playAnimation("groove") end, canFavorite = true, type = "button"},
-    {name = "Lay", desc = "Play lay animation", category = "Animations", func = function() playAnimation("lay") end, canFavorite = true, type = "button"},
-    {name = "Sit", desc = "Play sit animation", category = "Animations", func = function() playAnimation("sit") end, canFavorite = true, type = "button"},
-    {name = "Superhero", desc = "Play superhero animation", category = "Animations", func = function() playAnimation("superhero") end, canFavorite = true, type = "button"},
-    {name = "Spin", desc = "Play spin animation", category = "Animations", func = function() playAnimation("spin") end, canFavorite = true, type = "button"},
+    -- Animation commands - ONLY WORKING ONES
+    {name = "Dab", desc = "Play/Stop dab animation", category = "Animations", func = function() playDabAnimation() end, canFavorite = true, type = "toggle"},
     
-    -- Troll/Fun commands
-    {name = "DanceAnimate", desc = "Play dance animation", category = "Fun", func = function() playDanceAnimation() end, canFavorite = true, type = "button"},
-    {name = "FakeChat", desc = "Send fake chat message", category = "Fun", func = function(name, message) fakeChatMessage(name, message) end, canFavorite = true, type = "input", inputType = "text"},
+    -- Fun commands - WORKING ONLY
     {name = "GiantSize", desc = "Make character giant", category = "Fun", func = function() makeGiantSize() end, canFavorite = true, type = "button"},
     {name = "TinySize", desc = "Make character tiny", category = "Fun", func = function() makeTinySize() end, canFavorite = true, type = "button"},
-    {name = "FloatingParts", desc = "Create floating parts", category = "Fun", func = function() createFloatingParts() end, canFavorite = true, type = "button"},
     {name = "SpinCharacter", desc = "Spin your character", category = "Fun", func = function() spinCharacter() end, canFavorite = true, type = "button"},
-    {name = "Ultimate Fling", desc = "Advanced fling script", category = "Fun", func = function() loadUltimateFling() end, canFavorite = true, type = "button"},
-    {name = "Touch Fling", desc = "Fling players on touch", category = "Fun", func = function() loadTouchFling() end, canFavorite = true, type = "toggle"},
     
     -- Player commands
-    {name = "Spectate", desc = "Spectate a player", category = "Players", func = function(playerName) spectatePlayer(playerName) end, canFavorite = true, type = "input", inputType = "text"},
+    {name = "Spectate", desc = "Spectate a player", category = "Players", func = function() showPlayerList("spectate") end, canFavorite = true, type = "button"},
     {name = "Unspectate", desc = "Stop spectating", category = "Players", func = function() unspectatePlayer() end, canFavorite = true, type = "button"},
-    {name = "Goto", desc = "Go to a player", category = "Players", func = function(playerName) goToPlayer(playerName) end, canFavorite = true, type = "input", inputType = "text"},
-    {name = "Bring", desc = "Bring a player to you", category = "Players", func = function(playerName) bringPlayer(playerName) end, canFavorite = true, type = "input", inputType = "text"},
-    {name = "FlingPlayer", desc = "Fling a player", category = "Players", func = function(playerName) flingPlayer(playerName) end, canFavorite = true, type = "input", inputType = "text"},
+    {name = "Goto", desc = "Go to a player", category = "Players", func = function() showPlayerList("goto") end, canFavorite = true, type = "button"},
+    {name = "Bring", desc = "Bring a player to you", category = "Players", func = function() showPlayerList("bring") end, canFavorite = true, type = "button"},
+    {name = "FlingPlayer", desc = "Fling a player", category = "Players", func = function() showPlayerList("fling") end, canFavorite = true, type = "button"},
     
     -- Tools
     {name = "CopyPosition", desc = "Copy position to clipboard", category = "Utility", func = function() copyPosition() end, canFavorite = true, type = "button"},
@@ -2415,6 +2402,897 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end)
+
+-- =============================
+-- DÜZELTMELER - İSTENEN ÖZELLİKLER
+-- =============================
+
+-- Player List Functions for TpToPlayer and FlingPlayer
+function showPlayerList(actionType)
+    if playerListVisible then
+        hidePlayerList()
+        return
+    end
+    
+    -- Create player list frame
+    playerListFrame = Instance.new("Frame")
+    playerListFrame.Name = "PlayerListFrame"
+    playerListFrame.Size = UDim2.new(0, 250, 0, 350)
+    playerListFrame.Position = UDim2.new(0.5, -125, 0.5, -175)
+    playerListFrame.BackgroundColor3 = colors.background
+    playerListFrame.BorderSizePixel = 0
+    playerListFrame.Active = true
+    playerListFrame.Draggable = true
+    
+    -- Add to existing GUI
+    if CoreGui:FindFirstChild("KILASIKGUI") then
+        playerListFrame.Parent = CoreGui.KILASIKGUI
+    else
+        local tempGui = Instance.new("ScreenGui")
+        tempGui.Name = "KILASIKGUI_PlayerList"
+        tempGui.Parent = CoreGui
+        playerListFrame.Parent = tempGui
+    end
+    
+    -- Add corner radius
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = playerListFrame
+    
+    -- Title bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 35)
+    titleBar.BackgroundColor3 = colors.header
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = playerListFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = titleBar
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -35, 1, 0)
+    title.BackgroundTransparency = 1
+    title.Text = actionType == "teleport" and "Select Player to Teleport" or "Select Player to Fling"
+    title.TextColor3 = colors.text
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 16
+    title.Parent = titleBar
+    
+    -- Close button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -32, 0, 2.5)
+    closeBtn.BackgroundColor3 = colors.warning
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = colors.text
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 14
+    closeBtn.Parent = titleBar
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 4)
+    closeBtnCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        hidePlayerList()
+    end)
+    
+    -- Player scroll frame
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -10, 1, -45)
+    scrollFrame.Position = UDim2.new(0, 5, 0, 40)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.Parent = playerListFrame
+    
+    -- Add players to list
+    local yPos = 5
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player then
+            local playerBtn = Instance.new("TextButton")
+            playerBtn.Size = UDim2.new(1, -10, 0, 35)
+            playerBtn.Position = UDim2.new(0, 5, 0, yPos)
+            playerBtn.BackgroundColor3 = colors.button
+            playerBtn.BorderSizePixel = 0
+            playerBtn.Text = otherPlayer.Name
+            playerBtn.TextColor3 = colors.text
+            playerBtn.Font = Enum.Font.SourceSans
+            playerBtn.TextSize = 14
+            playerBtn.Parent = scrollFrame
+            
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 4)
+            btnCorner.Parent = playerBtn
+            
+            playerBtn.MouseEnter:Connect(function()
+                playerBtn.BackgroundColor3 = colors.buttonHover
+            end)
+            
+            playerBtn.MouseLeave:Connect(function()
+                playerBtn.BackgroundColor3 = colors.button
+            end)
+            
+            playerBtn.MouseButton1Click:Connect(function()
+                if actionType == "teleport" then
+                    teleportToPlayerDirect(otherPlayer.Name)
+                elseif actionType == "fling" then
+                    flingPlayerDirect(otherPlayer.Name)
+                end
+                hidePlayerList()
+            end)
+            
+            yPos = yPos + 40
+        end
+    end
+    
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
+    playerListVisible = true
+end
+
+function hidePlayerList()
+    if playerListFrame then
+        playerListFrame:Destroy()
+        playerListFrame = nil
+        playerListVisible = false
+    end
+    
+    -- Also destroy temp GUI if exists
+    if CoreGui:FindFirstChild("KILASIKGUI_PlayerList") then
+        CoreGui.KILASIKGUI_PlayerList:Destroy()
+    end
+end
+
+function teleportToPlayerDirect(playerName)
+    local targetPlayer = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name == playerName then
+            targetPlayer = p
+            break
+        end
+    end
+    
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0)
+            setStatus("Teleported to " .. targetPlayer.Name)
+        end
+    else
+        setStatus("Player not found: " .. playerName)
+    end
+end
+
+-- Working Fling Function from the second script
+function SkidFling(TargetPlayer)
+    local Character = player.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    local TCharacter = TargetPlayer.Character
+    
+    if not TCharacter then 
+        setStatus("Target has no character!")
+        return 
+    end
+    
+    local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
+    
+    if Character and Humanoid and RootPart then
+        if RootPart.Velocity.Magnitude < 50 then
+            getgenv().OldPos = RootPart.CFrame
+        end
+        
+        if THumanoid and THumanoid.Sit then
+            setStatus(TargetPlayer.Name .. " is sitting")
+            return
+        end
+        
+        if THead then
+            workspace.CurrentCamera.CameraSubject = THead
+        elseif Handle then
+            workspace.CurrentCamera.CameraSubject = Handle
+        elseif THumanoid and TRootPart then
+            workspace.CurrentCamera.CameraSubject = THumanoid
+        end
+        
+        if not TCharacter:FindFirstChildWhichIsA("BasePart") then
+            return
+        end
+        
+        local FPos = function(BasePart, Pos, Ang)
+            RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+            Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+            RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+            RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+        end
+        
+        local SFBasePart = function(BasePart)
+            local TimeToWait = 2
+            local Time = tick()
+            local Angle = 0
+            
+            repeat
+                if RootPart and THumanoid then
+                    if BasePart.Velocity.Magnitude < 50 then
+                        Angle = Angle + 100
+                        FPos(BasePart, CFrame.new(0, 1.5, 0) + TRootPart.CFrame.LookVector * 1.5, CFrame.Angles(math.rad(Angle), 0, 0))
+                        task.wait()
+                        FPos(BasePart, CFrame.new(0, -1.5, 0) + TRootPart.CFrame.LookVector * 1.5, CFrame.Angles(math.rad(Angle), 0, 0))
+                        task.wait()
+                        FPos(BasePart, CFrame.new(1.5, 1.5, -1) + TRootPart.CFrame.LookVector * 1.5, CFrame.Angles(math.rad(Angle), 0, 0))
+                        task.wait()
+                        FPos(BasePart, CFrame.new(-1.5, -1.5, 1) + TRootPart.CFrame.LookVector * 1.5, CFrame.Angles(math.rad(Angle), 0, 0))
+                        task.wait()
+                    end
+                else
+                    break
+                end
+            until BasePart.Velocity.Magnitude >= 50 or tick() - Time >= TimeToWait
+        end
+        
+        workspace.FallenPartsDestroyHeight = 0/0
+        
+        local BV = Instance.new("BodyVelocity")
+        BV.Name = "EpixVel"
+        BV.Parent = RootPart
+        BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+        BV.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+        
+        if TRootPart and THead then
+            if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+                SFBasePart(THead)
+            else
+                SFBasePart(TRootPart)
+            end
+        elseif TRootPart and not THead then
+            SFBasePart(TRootPart)
+        elseif THead and not TRootPart then
+            SFBasePart(THead)
+        elseif not TRootPart and not THead and Accessory and Handle then
+            SFBasePart(Handle)
+        else
+            setStatus("No target found!")
+            BV:Destroy()
+            return
+        end
+        
+        BV:Destroy()
+        workspace.CurrentCamera.CameraSubject = Humanoid
+        workspace.FallenPartsDestroyHeight = getgenv().FPDH or -500
+        
+        if getgenv().OldPos then
+            RootPart.CFrame = getgenv().OldPos
+        end
+        
+        setStatus("Flinged " .. TargetPlayer.Name)
+    end
+end
+
+function flingPlayerDirect(playerName)
+    local targetPlayer = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name == playerName then
+            targetPlayer = p
+            break
+        end
+    end
+    
+    if targetPlayer then
+        if targetPlayer == player then
+            setStatus("Cannot fling yourself!")
+            return
+        end
+        SkidFling(targetPlayer)
+    else
+        setStatus("Player not found: " .. playerName)
+    end
+end
+
+-- Override existing functions to use player lists
+local originalTeleportToPlayer = teleportToPlayer
+teleportToPlayer = function(playerName)
+    if not playerName or playerName == "" then
+        showPlayerList("teleport")
+        return
+    end
+    originalTeleportToPlayer(playerName)
+end
+
+local originalFlingPlayer = flingPlayer
+flingPlayer = function(playerName)
+    if not playerName or playerName == "" then
+        showPlayerList("fling")
+        return
+    end
+    
+    local targetPlayer = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if string.lower(p.Name):find(string.lower(playerName)) or string.lower(p.DisplayName):find(string.lower(playerName)) then
+            targetPlayer = p
+            break
+        end
+    end
+    
+    if targetPlayer then
+        if targetPlayer == player then
+            setStatus("Cannot fling yourself!")
+            return
+        end
+        SkidFling(targetPlayer)
+    else
+        setStatus("Player not found: " .. playerName)
+    end
+end
+
+-- DAB Animation Fix - Override existing playAnimation function for DAB only
+local originalPlayAnimation = playAnimation
+playAnimation = function(animType)
+    if animType == "dab" then
+        if not player.Character or not player.Character:FindFirstChild("Humanoid") then 
+            setStatus("Character not found!")
+            return 
+        end
+        
+        if dabAnimationTrack then
+            -- Stop existing animation
+            dabAnimationTrack:Stop()
+            dabAnimationTrack = nil
+            setStatus("DAB animation stopped")
+            return
+        end
+        
+        local humanoid = player.Character.Humanoid
+        local animation = Instance.new("Animation")
+        animation.AnimationId = "rbxassetid://248263260"
+        
+        -- Load and play animation
+        dabAnimationTrack = humanoid:LoadAnimation(animation)
+        if dabAnimationTrack then
+            dabAnimationTrack.Looped = true
+            dabAnimationTrack:Play()
+            setStatus("DAB animation started - Click again to stop")
+        else
+            setStatus("Failed to load DAB animation")
+        end
+    else
+        -- Remove other animations - only show error
+        setStatus("Animation removed - Only DAB animation is available")
+    end
+end
+
+-- GUI Resize and Minimize Functions
+function addResizeFeatures()
+    spawn(function()
+        wait(2) -- Wait for GUI to load
+        
+        local gui = CoreGui:FindFirstChild("KILASIKGUI")
+        if not gui then return end
+        
+        local mainFrame = gui:FindFirstChild("MainFrame")
+        if not mainFrame then return end
+        
+        -- Add minimize button if doesn't exist
+        local titleBar = mainFrame:FindFirstChild("TitleBar")
+        if titleBar and not titleBar:FindFirstChild("MinimizeButton") then
+            local minimizeBtn = Instance.new("TextButton")
+            minimizeBtn.Name = "MinimizeButton"
+            minimizeBtn.Size = UDim2.new(0, 30, 0, 25)
+            minimizeBtn.Position = UDim2.new(1, -70, 0, 2)
+            minimizeBtn.BackgroundColor3 = colors.highlight
+            minimizeBtn.BorderSizePixel = 0
+            minimizeBtn.Text = "-"
+            minimizeBtn.TextColor3 = colors.text
+            minimizeBtn.Font = Enum.Font.SourceSansBold
+            minimizeBtn.TextSize = 16
+            minimizeBtn.Parent = titleBar
+            
+            local minimized = false
+            local originalSize = mainFrame.Size
+            
+            minimizeBtn.MouseButton1Click:Connect(function()
+                minimized = not minimized
+                if minimized then
+                    originalSize = mainFrame.Size
+                    mainFrame:TweenSize(UDim2.new(0, originalSize.X.Offset, 0, 35), "Out", "Quart", 0.3, true)
+                    minimizeBtn.Text = "+"
+                    
+                    -- Hide content
+                    for _, child in pairs(mainFrame:GetChildren()) do
+                        if child.Name ~= "TitleBar" then
+                            child.Visible = false
+                        end
+                    end
+                else
+                    mainFrame:TweenSize(originalSize, "Out", "Quart", 0.3, true)
+                    minimizeBtn.Text = "-"
+                    
+                    -- Show content
+                    for _, child in pairs(mainFrame:GetChildren()) do
+                        if child.Name ~= "TitleBar" then
+                            child.Visible = true
+                        end
+                    end
+                end
+            end)
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = minimizeBtn
+        end
+        
+        -- Add resize handle if doesn't exist
+        if not mainFrame:FindFirstChild("ResizeHandle") then
+            local resizeHandle = Instance.new("Frame")
+            resizeHandle.Name = "ResizeHandle"
+            resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+            resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+            resizeHandle.BackgroundColor3 = colors.header
+            resizeHandle.BorderSizePixel = 0
+            resizeHandle.Parent = mainFrame
+            
+            local resizeCorner = Instance.new("UICorner")
+            resizeCorner.CornerRadius = UDim.new(0, 10)
+            resizeCorner.Parent = resizeHandle
+            
+            -- Resize functionality
+            local dragging = false
+            local dragStart = nil
+            local startSize = nil
+            
+            resizeHandle.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = true
+                    dragStart = input.Position
+                    startSize = mainFrame.Size
+                end
+            end)
+            
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local delta = input.Position - dragStart
+                    local newSize = UDim2.new(
+                        startSize.X.Scale, 
+                        math.max(400, startSize.X.Offset + delta.X),
+                        startSize.Y.Scale, 
+                        math.max(300, startSize.Y.Offset + delta.Y)
+                    )
+                    mainFrame.Size = newSize
+                end
+            end)
+            
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+end
+
+-- =============================
+-- IMPROVED FEATURES - SETTINGS PANELS
+-- =============================
+
+-- Speed Settings Panel
+function showSpeedSettings()
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Name = "SpeedSettings"
+    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
+    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+    settingsFrame.BackgroundColor3 = colors.background
+    settingsFrame.BorderSizePixel = 0
+    settingsFrame.Active = true
+    settingsFrame.Draggable = true
+    
+    if CoreGui:FindFirstChild("KILASIKGUI") then
+        settingsFrame.Parent = CoreGui.KILASIKGUI
+    else
+        local tempGui = Instance.new("ScreenGui")
+        tempGui.Name = "SpeedSettingsGUI"
+        tempGui.Parent = CoreGui
+        settingsFrame.Parent = tempGui
+    end
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = settingsFrame
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -40, 0, 40)
+    title.BackgroundTransparency = 1
+    title.Text = "Speed Settings"
+    title.TextColor3 = colors.text
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 18
+    title.Parent = settingsFrame
+    
+    -- Close button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundColor3 = colors.warning
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = colors.text
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 14
+    closeBtn.Parent = settingsFrame
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 4)
+    closeBtnCorner.Parent = closeBtn
+    
+    -- Speed input
+    local speedLabel = Instance.new("TextLabel")
+    speedLabel.Size = UDim2.new(1, -20, 0, 25)
+    speedLabel.Position = UDim2.new(0, 10, 0, 50)
+    speedLabel.BackgroundTransparency = 1
+    speedLabel.Text = "Current Speed: " .. walkSpeed
+    speedLabel.TextColor3 = colors.text
+    speedLabel.Font = Enum.Font.SourceSans
+    speedLabel.TextSize = 14
+    speedLabel.Parent = settingsFrame
+    
+    local speedInput = Instance.new("TextBox")
+    speedInput.Size = UDim2.new(1, -20, 0, 30)
+    speedInput.Position = UDim2.new(0, 10, 0, 80)
+    speedInput.BackgroundColor3 = colors.button
+    speedInput.BorderSizePixel = 0
+    speedInput.Text = tostring(walkSpeed)
+    speedInput.TextColor3 = colors.text
+    speedInput.Font = Enum.Font.SourceSans
+    speedInput.TextSize = 14
+    speedInput.PlaceholderText = "Enter speed (1-500)"
+    speedInput.Parent = settingsFrame
+    
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = speedInput
+    
+    -- Preset buttons
+    local presets = {16, 50, 100, 200}
+    for i, speed in ipairs(presets) do
+        local presetBtn = Instance.new("TextButton")
+        presetBtn.Size = UDim2.new(0.2, -5, 0, 25)
+        presetBtn.Position = UDim2.new((i-1) * 0.25, 5, 0, 120)
+        presetBtn.BackgroundColor3 = colors.highlight
+        presetBtn.BorderSizePixel = 0
+        presetBtn.Text = tostring(speed)
+        presetBtn.TextColor3 = colors.text
+        presetBtn.Font = Enum.Font.SourceSans
+        presetBtn.TextSize = 12
+        presetBtn.Parent = settingsFrame
+        
+        local presetCorner = Instance.new("UICorner")
+        presetCorner.CornerRadius = UDim.new(0, 4)
+        presetCorner.Parent = presetBtn
+        
+        presetBtn.MouseButton1Click:Connect(function()
+            speedInput.Text = tostring(speed)
+            setWalkSpeed(speed)
+            speedLabel.Text = "Current Speed: " .. speed
+        end)
+    end
+    
+    -- Apply button
+    local applyBtn = Instance.new("TextButton")
+    applyBtn.Size = UDim2.new(1, -20, 0, 30)
+    applyBtn.Position = UDim2.new(0, 10, 0, 155)
+    applyBtn.BackgroundColor3 = colors.success
+    applyBtn.BorderSizePixel = 0
+    applyBtn.Text = "Apply Speed"
+    applyBtn.TextColor3 = colors.text
+    applyBtn.Font = Enum.Font.SourceSansBold
+    applyBtn.TextSize = 14
+    applyBtn.Parent = settingsFrame
+    
+    local applyCorner = Instance.new("UICorner")
+    applyCorner.CornerRadius = UDim.new(0, 4)
+    applyCorner.Parent = applyBtn
+    
+    applyBtn.MouseButton1Click:Connect(function()
+        local newSpeed = tonumber(speedInput.Text)
+        if newSpeed and newSpeed > 0 and newSpeed <= 500 then
+            setWalkSpeed(newSpeed)
+            speedLabel.Text = "Current Speed: " .. newSpeed
+        else
+            setStatus("Invalid speed! Use 1-500")
+        end
+    end)
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        settingsFrame:Destroy()
+    end)
+end
+
+-- Jump Settings Panel
+function showJumpSettings()
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Name = "JumpSettings"
+    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
+    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+    settingsFrame.BackgroundColor3 = colors.background
+    settingsFrame.BorderSizePixel = 0
+    settingsFrame.Active = true
+    settingsFrame.Draggable = true
+    
+    if CoreGui:FindFirstChild("KILASIKGUI") then
+        settingsFrame.Parent = CoreGui.KILASIKGUI
+    else
+        local tempGui = Instance.new("ScreenGui")
+        tempGui.Name = "JumpSettingsGUI"
+        tempGui.Parent = CoreGui
+        settingsFrame.Parent = tempGui
+    end
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = settingsFrame
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -40, 0, 40)
+    title.BackgroundTransparency = 1
+    title.Text = "Jump Power Settings"
+    title.TextColor3 = colors.text
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 18
+    title.Parent = settingsFrame
+    
+    -- Close button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundColor3 = colors.warning
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = colors.text
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 14
+    closeBtn.Parent = settingsFrame
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 4)
+    closeBtnCorner.Parent = closeBtn
+    
+    -- Jump input
+    local jumpLabel = Instance.new("TextLabel")
+    jumpLabel.Size = UDim2.new(1, -20, 0, 25)
+    jumpLabel.Position = UDim2.new(0, 10, 0, 50)
+    jumpLabel.BackgroundTransparency = 1
+    jumpLabel.Text = "Current Jump Power: " .. jumpPower
+    jumpLabel.TextColor3 = colors.text
+    jumpLabel.Font = Enum.Font.SourceSans
+    jumpLabel.TextSize = 14
+    jumpLabel.Parent = settingsFrame
+    
+    local jumpInput = Instance.new("TextBox")
+    jumpInput.Size = UDim2.new(1, -20, 0, 30)
+    jumpInput.Position = UDim2.new(0, 10, 0, 80)
+    jumpInput.BackgroundColor3 = colors.button
+    jumpInput.BorderSizePixel = 0
+    jumpInput.Text = tostring(jumpPower)
+    jumpInput.TextColor3 = colors.text
+    jumpInput.Font = Enum.Font.SourceSans
+    jumpInput.TextSize = 14
+    jumpInput.PlaceholderText = "Enter jump power (1-1000)"
+    jumpInput.Parent = settingsFrame
+    
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = jumpInput
+    
+    -- Preset buttons
+    local presets = {50, 100, 200, 500}
+    for i, power in ipairs(presets) do
+        local presetBtn = Instance.new("TextButton")
+        presetBtn.Size = UDim2.new(0.2, -5, 0, 25)
+        presetBtn.Position = UDim2.new((i-1) * 0.25, 5, 0, 120)
+        presetBtn.BackgroundColor3 = colors.highlight
+        presetBtn.BorderSizePixel = 0
+        presetBtn.Text = tostring(power)
+        presetBtn.TextColor3 = colors.text
+        presetBtn.Font = Enum.Font.SourceSans
+        presetBtn.TextSize = 12
+        presetBtn.Parent = settingsFrame
+        
+        local presetCorner = Instance.new("UICorner")
+        presetCorner.CornerRadius = UDim.new(0, 4)
+        presetCorner.Parent = presetBtn
+        
+        presetBtn.MouseButton1Click:Connect(function()
+            jumpInput.Text = tostring(power)
+            setJumpPower(power)
+            jumpLabel.Text = "Current Jump Power: " .. power
+        end)
+    end
+    
+    -- Apply button
+    local applyBtn = Instance.new("TextButton")
+    applyBtn.Size = UDim2.new(1, -20, 0, 30)
+    applyBtn.Position = UDim2.new(0, 10, 0, 155)
+    applyBtn.BackgroundColor3 = colors.success
+    applyBtn.BorderSizePixel = 0
+    applyBtn.Text = "Apply Jump Power"
+    applyBtn.TextColor3 = colors.text
+    applyBtn.Font = Enum.Font.SourceSansBold
+    applyBtn.TextSize = 14
+    applyBtn.Parent = settingsFrame
+    
+    local applyCorner = Instance.new("UICorner")
+    applyCorner.CornerRadius = UDim.new(0, 4)
+    applyCorner.Parent = applyBtn
+    
+    applyBtn.MouseButton1Click:Connect(function()
+        local newPower = tonumber(jumpInput.Text)
+        if newPower and newPower > 0 and newPower <= 1000 then
+            setJumpPower(newPower)
+            jumpLabel.Text = "Current Jump Power: " .. newPower
+        else
+            setStatus("Invalid jump power! Use 1-1000")
+        end
+    end)
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        settingsFrame:Destroy()
+    end)
+end
+
+-- Fixed DAB Animation Function
+function playDabAnimation()
+    if not player.Character or not player.Character:FindFirstChild("Humanoid") then 
+        setStatus("Character not found!")
+        return 
+    end
+    
+    if dabAnimationTrack then
+        dabAnimationTrack:Stop()
+        dabAnimationTrack = nil
+        setStatus("DAB animation stopped")
+        return
+    end
+    
+    local humanoid = player.Character.Humanoid
+    local animation = Instance.new("Animation")
+    animation.AnimationId = "rbxassetid://248263260"
+    
+    dabAnimationTrack = humanoid:LoadAnimation(animation)
+    if dabAnimationTrack then
+        dabAnimationTrack.Looped = true
+        dabAnimationTrack:Play()
+        setStatus("DAB animation started - Click again to stop")
+    else
+        setStatus("Failed to load DAB animation")
+    end
+end
+
+-- Fixed ESP Functions
+function updateESP()
+    if not esp.enabled then return end
+    
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and 
+           otherPlayer.Character:FindFirstChild("HumanoidRootPart") and 
+           otherPlayer.Character:FindFirstChild("Head") then
+            
+            local char = otherPlayer.Character
+            local hrp = char.HumanoidRootPart
+            local head = char.Head
+            
+            -- Team check
+            local isFriendly = false
+            if esp.teamCheck and player.Team and otherPlayer.Team then
+                isFriendly = player.Team == otherPlayer.Team
+            end
+            
+            if not esp.teamCheck or not isFriendly then
+                local espColor = Color3.fromRGB(255, 0, 0)
+                if esp.teamColor and otherPlayer.Team then
+                    espColor = otherPlayer.TeamColor.Color
+                end
+                
+                -- Create ESP container
+                local espContainer = char:FindFirstChild("KILASIK_ESP")
+                if not espContainer then
+                    espContainer = Instance.new("Folder")
+                    espContainer.Name = "KILASIK_ESP"
+                    espContainer.Parent = char
+                end
+                
+                -- Names ESP
+                if esp.names then
+                    local nameESP = espContainer:FindFirstChild("NameESP")
+                    if not nameESP then
+                        nameESP = Instance.new("BillboardGui")
+                        nameESP.Name = "NameESP"
+                        nameESP.Adornee = head
+                        nameESP.Size = UDim2.new(0, 200, 0, 50)
+                        nameESP.StudsOffset = Vector3.new(0, 2, 0)
+                        nameESP.AlwaysOnTop = true
+                        nameESP.Parent = espContainer
+                        
+                        local nameLabel = Instance.new("TextLabel")
+                        nameLabel.Size = UDim2.new(1, 0, 1, 0)
+                        nameLabel.BackgroundTransparency = 1
+                        nameLabel.Font = Enum.Font.SourceSansBold
+                        nameLabel.TextSize = 16
+                        nameLabel.TextStrokeTransparency = 0
+                        nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                        nameLabel.Parent = nameESP
+                    end
+                    
+                    local nameLabel = nameESP:FindFirstChild("TextLabel")
+                    nameLabel.TextColor3 = espColor
+                    nameLabel.Text = otherPlayer.Name
+                    
+                    if esp.distances then
+                        local distance = (player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
+                        nameLabel.Text = otherPlayer.Name .. " [" .. math.floor(distance) .. "m]"
+                    end
+                else
+                    local nameESP = espContainer:FindFirstChild("NameESP")
+                    if nameESP then nameESP:Destroy() end
+                end
+                
+                -- Box ESP
+                if esp.boxes then
+                    local boxESP = espContainer:FindFirstChild("BoxESP")
+                    if not boxESP then
+                        boxESP = Instance.new("SelectionBox")
+                        boxESP.Name = "BoxESP"
+                        boxESP.Adornee = char
+                        boxESP.LineThickness = 0.1
+                        boxESP.Transparency = 0.5
+                        boxESP.Parent = espContainer
+                    end
+                    boxESP.Color3 = espColor
+                else
+                    local boxESP = espContainer:FindFirstChild("BoxESP")
+                    if boxESP then boxESP:Destroy() end
+                end
+                
+                -- Chams ESP
+                if esp.chams then
+                    local chamsESP = espContainer:FindFirstChild("ChamsESP")
+                    if not chamsESP then
+                        chamsESP = Instance.new("Highlight")
+                        chamsESP.Name = "ChamsESP"
+                        chamsESP.Adornee = char
+                        chamsESP.FillTransparency = 0.5
+                        chamsESP.OutlineTransparency = 0
+                        chamsESP.Parent = espContainer
+                    end
+                    chamsESP.FillColor = espColor
+                    chamsESP.OutlineColor = espColor
+                else
+                    local chamsESP = espContainer:FindFirstChild("ChamsESP")
+                    if chamsESP then chamsESP:Destroy() end
+                end
+            else
+                cleanupESP(otherPlayer)
+            end
+        end
+    end
+end
+
+function cleanupESP(targetPlayer)
+    if targetPlayer.Character then
+        local espContainer = targetPlayer.Character:FindFirstChild("KILASIK_ESP")
+        if espContainer then
+            espContainer:Destroy()
+        end
+    end
+end
+
+-- Apply all GUI improvements
+addResizeFeatures()
 
 -- Main execution
 if not keyVerified then
